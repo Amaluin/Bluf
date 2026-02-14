@@ -1,0 +1,15 @@
+{
+  "name": "bluf-card-game",
+  "version": "1.0.0",
+  "description": "Карточная игра Верю/Не верю — мультиплеер 1–4 игрока по сети",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "socket.io": "^4.8.0"
+  }
+}

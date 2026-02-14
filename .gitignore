@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+*.log
+.DS_Store
+
+# IDE / editor
+.idea/
+.vscode/
+.claude/
+
+# Временные/бэкап файлы стилей (основной — public/styles.css)
+recovered-styles.css
+styles-*-lines.css
+styles-complete.css
+styles-recovered-complete.css
+find-css.ps1

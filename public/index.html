@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a3c2e">
+  <title>Верю / Не верю — Bluf</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Предупреждение о портретной ориентации -->
+  <div id="orientation-warning" class="orientation-warning">
+    <div class="orientation-content">
+      <div class="phone-icon">📱</div>
+      <h2>Поверните устройство</h2>
+      <p>Эта игра предназначена для горизонтальной ориентации</p>
+      <div class="rotate-icon">🔄</div>
+    </div>
+  </div>
+
+  <div id="app">
+    <header class="header">
+      <h1 class="title">Верю / Не верю</h1>
+      <p class="subtitle">Bluf</p>
+    </header>
+
+    <main class="main">
+      <!-- Экран входа -->
+      <section id="screen-welcome" class="screen active">
+        <div class="welcome-card">
+          <label class="label">Ваше имя</label>
+          <input type="text" id="input-name" class="input" placeholder="Игрок" maxlength="20" autocomplete="off">
+          <div class="welcome-actions">
+            <button type="button" id="btn-create" class="btn btn-primary">Создать игру</button>
+            <div class="divider">или</div>
+            <input type="text" id="input-code" class="input input-code" placeholder="Код комнаты" maxlength="6" autocomplete="off">
+            <button type="button" id="btn-join" class="btn btn-secondary">Войти</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Лобби -->
+      <section id="screen-lobby" class="screen">
+        <div class="lobby-card">
+          <p class="lobby-code">Комната: <strong id="lobby-code" class="clickable-code" title="Нажмите, чтобы скопировать"></strong></p>
+          <p id="copy-notification" class="copy-notification hidden">Код скопирован!</p>
+          <p class="lobby-hint">Поделитесь кодом с друзьями (2–6 игроков)</p>
+          <ul id="lobby-players" class="player-list"></ul>
+          <div class="lobby-actions">
+            <button type="button" id="btn-start" class="btn btn-primary" disabled>Начать игру</button>
+            <button type="button" id="btn-leave-lobby" class="btn btn-ghost">Выйти</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Бросок кубика -->
+      <section id="screen-dice" class="screen">
+        <div class="dice-card">
+          <h2 class="dice-title">Бросок кубика</h2>
+          <p class="dice-subtitle">Определяем первого игрока</p>
+          <div id="dice-results" class="dice-results"></div>
+          <button type="button" id="btn-confirm-dice" class="btn btn-primary">Продолжить</button>
+        </div>
+      </section>
+
+      <!-- Игра -->
+      <section id="screen-game" class="screen">
+        <div class="game-layout">
+          <div class="game-info">
+            <p id="game-status" class="status-text"></p>
+            <p id="game-claim" class="claim-text"></p>
+          </div>
+          <div class="table-center">
+            <div class="discard-pile">
+              <div id="discard-cards" class="discard-cards"></div>
+              <p id="discard-count" class="discard-count">Отбой: 0</p>
+            </div>
+            <div class="pile-area">
+              <div id="pile-cards" class="pile-cards"></div>
+              <p id="pile-count" class="pile-count"></p>
+            </div>
+          </div>
+          <div id="opponents" class="opponents"></div>
+          <div class="my-area">
+            <div id="my-hand" class="hand"></div>
+            <div class="my-actions">
+              <div id="selected-indicator" class="selected-cards-indicator hidden">
+                <span id="selected-count">0</span> карт выбрано
+              </div>
+              <div id="select-rank" class="rank-select hidden">
+                <span class="rank-label">Заявить ранг:</span>
+                <div id="rank-buttons" class="rank-buttons"></div>
+              </div>
+              <div class="action-buttons">
+                <button type="button" id="btn-play" class="btn btn-play" disabled>Положить карты</button>
+                <button type="button" id="btn-trust" class="btn btn-trust" disabled>Верю</button>
+                <button type="button" id="btn-challenge" class="btn btn-challenge" disabled>Не верю</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="challenge-toast" class="toast hidden"></div>
+        <div class="game-footer">
+          <button type="button" id="btn-leave-game" class="btn btn-ghost btn-sm">Выйти из игры</button>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
