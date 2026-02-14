@@ -34,10 +34,17 @@ npm run dev
 4. Игроки бросают кубик для определения порядка хода.
 5. Для игры с одного устройства можно открыть несколько вкладок или использовать несколько устройств в одной сети (подключение по IP: `http://<IP>:3000`).
 
+## Сборка APK (Android)
+
+Можно собрать Android-приложение: тот же интерфейс, подключение к вашему серверу. Подробно — **[BUILD_APK.md](BUILD_APK.md)**.
+
+Кратко: задать адрес сервера в `public/config.js`, выполнить `npx cap sync`, открыть папку `android` в Android Studio и собрать APK (Build → Build APK(s)).
+
 ## Стек
 
 - **Сервер:** Node.js, Express, Socket.IO (комнаты, состояние игры).
 - **Клиент:** HTML, CSS, JavaScript; адаптивная вёрстка, мобильный первый подход.
+- **Android:** Capacitor (обёртка веб-приложения в APK).
 
 ## Структура проекта
 
@@ -49,8 +56,13 @@ Bluf/
 │   └── rooms.js   # Комнаты, игроки, ходы (play/challenge/trust)
 ├── public/
 │   ├── index.html
+│   ├── config.js  # URL сервера для APK (оставить '' для веб)
 │   ├── styles.css
 │   └── app.js     # Клиент: экраны, карты, сокеты
+├── android/       # Проект Android (Capacitor)
+├── capacitor.config.json
 ├── package.json
-└── README.md
+├── README.md
+├── DEPLOY.md      # Развёртывание на VPS
+└── BUILD_APK.md   # Сборка APK
 ```

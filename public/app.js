@@ -100,9 +100,8 @@ function renderCard(id, options = {}) {
 }
 
 function connect() {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = location.host;
-  socket = io({ path: '/socket.io', transports: ['websocket', 'polling'] });
+  var serverUrl = (typeof window !== 'undefined' && window.BLUF_SERVER_URL) || '';
+  socket = io(serverUrl, { path: '/socket.io', transports: ['websocket', 'polling'] });
 
   socket.on('connect', () => {
     console.log('Connected');

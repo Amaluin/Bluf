@@ -6,10 +6,23 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node --watch server/index.js"
+    "dev": "node --watch server/index.js",
+    "cap:sync": "npx cap sync",
+    "cap:android": "npx cap open android",
+    "build:apk": "node scripts/build-apk.js"
   },
   "dependencies": {
     "express": "^4.21.0",
     "socket.io": "^4.8.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/cli": "^6.1.0",
+    "@capacitor/core": "^6.1.0"
+  },
+  "capacitor": {
+    "android": {
+      "path": "android"
+    }
   }
 }
