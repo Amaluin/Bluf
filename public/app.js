@@ -43,6 +43,13 @@ var CHAT_COLORS = [
 var chatNameToColor = {};
 var chatColorIndex = 0;
 
+/* Лобби: видео/звук WebRTC */
+var LOBBY_STUN = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+var lobbyMediaRequested = false;
+var localLobbyStream = null;
+var lobbyPeerConnections = {};
+var lobbyRemoteStreams = {};
+
 const $ = (id) => document.getElementById(id);
 const showScreen = (id) => {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -152,8 +159,15 @@ function connect() {
     updateChatVisibility();
     ensureChatColors(state.players || []);
     $('lobby-code').textContent = state.code;
-    const list = $('lobby-players');
-    list.innerHTML = state.players.map(p => `<li>${escapeHtml(p.name)}</li>`).join('');
+
+    if (state.state === 'lobby' && state.players && state.players.length) {
+      requestLobbyMedia().then(function () {
+        renderLobbyWithVideos(state.players);
+        ensureLobbyConnections(state.players);
+      });
+    } else {
+      renderLobbyWithVideos(state.players || []);
+    }
 
     // Определяем, является ли текущий игрок хостом (первый игрок в списке)
     const firstPlayer = state.players[0];
@@ -173,6 +187,43 @@ function connect() {
     }
   });
 
+  socket.on('webrtc_offer', function (data) {
+    var fromSocketId = data.fromSocketId;
+    var sdp = data.sdp;
+    if (!fromSocketId || !sdp || !roomCode) return;
+    function doAnswer() {
+      var pc = getOrCreateLobbyPeer(fromSocketId);
+      if (localLobbyStream) localLobbyStream.getTracks().forEach(function (t) { pc.addTrack(t, localLobbyStream); });
+      pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(function () {
+        return pc.createAnswer();
+      }).then(function (answer) {
+        return pc.setLocalDescription(answer);
+      }).then(function () {
+        socket.emit('webrtc_answer', { roomCode: roomCode, targetSocketId: fromSocketId, sdp: pc.localDescription });
+      }).catch(function (err) { console.warn('Lobby answer error:', err); });
+    }
+    if (localLobbyStream) doAnswer();
+    else requestLobbyMedia().then(doAnswer);
+  });
+
+  socket.on('webrtc_answer', function (data) {
+    var fromSocketId = data.fromSocketId;
+    var sdp = data.sdp;
+    if (!fromSocketId || !sdp) return;
+    var pc = lobbyPeerConnections[fromSocketId];
+    if (!pc) return;
+    pc.setRemoteDescription(new RTCSessionDescription(sdp)).catch(function (err) { console.warn('Lobby setRemote answer:', err); });
+  });
+
+  socket.on('webrtc_ice', function (data) {
+    var fromSocketId = data.fromSocketId;
+    var candidate = data.candidate;
+    if (!fromSocketId) return;
+    var pc = lobbyPeerConnections[fromSocketId];
+    if (!pc) return;
+    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(function (err) { console.warn('Lobby addIceCandidate:', err); });
+  });
+
   socket.on('dice_rolled', (diceRolls) => {
     showScreen('screen-dice');
     const resultsEl = $('dice-results');
@@ -186,6 +237,7 @@ function connect() {
   });
 
   socket.on('room_closed', () => {
+    stopLobbyMedia();
     roomCode = null;
     myPlayerId = null;
     updateChatVisibility();
@@ -199,6 +251,7 @@ function connect() {
   });
 
   socket.on('game_started', () => {
+    stopLobbyMedia();
     showScreen('screen-game');
   });
 
@@ -642,6 +695,123 @@ function sendChatMessage() {
   });
 }
 
+function requestLobbyMedia() {
+  if (lobbyMediaRequested) return Promise.resolve();
+  lobbyMediaRequested = true;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return Promise.resolve();
+  }
+  return navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    .then(function (stream) {
+      localLobbyStream = stream;
+    })
+    .catch(function (err) {
+      localLobbyStream = null;
+      console.warn('Lobby camera/mic:', err);
+    });
+}
+
+function stopLobbyMedia() {
+  lobbyMediaRequested = false;
+  if (localLobbyStream) {
+    localLobbyStream.getTracks().forEach(function (t) { t.stop(); });
+    localLobbyStream = null;
+  }
+  Object.keys(lobbyPeerConnections).forEach(function (sid) {
+    try { lobbyPeerConnections[sid].close(); } catch (e) {}
+  });
+  lobbyPeerConnections = {};
+  lobbyRemoteStreams = {};
+}
+
+function getOrCreateLobbyPeer(remoteSocketId) {
+  if (lobbyPeerConnections[remoteSocketId]) return lobbyPeerConnections[remoteSocketId];
+  var pc = new RTCPeerConnection(LOBBY_STUN);
+  pc._remoteSocketId = remoteSocketId;
+  pc.onicecandidate = function (e) {
+    if (!e.candidate || !roomCode || !socket) return;
+    socket.emit('webrtc_ice', { roomCode: roomCode, targetSocketId: remoteSocketId, candidate: e.candidate });
+  };
+  pc.ontrack = function (e) {
+    var stream = e.streams && e.streams[0] ? e.streams[0] : (e.track ? new MediaStream([e.track]) : null);
+    if (!stream) return;
+    lobbyRemoteStreams[remoteSocketId] = stream;
+    var list = document.querySelectorAll('.lobby-player');
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].getAttribute('data-socket-id') === remoteSocketId) {
+        var video = list[i].querySelector('.lobby-video-el');
+        if (video) video.srcObject = stream;
+        break;
+      }
+    }
+  };
+  pc.onconnectionstatechange = function () {
+    if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+      delete lobbyRemoteStreams[remoteSocketId];
+    }
+  };
+  lobbyPeerConnections[remoteSocketId] = pc;
+  return pc;
+}
+
+function createLobbyOffer(remoteSocketId) {
+  if (!localLobbyStream || !roomCode || !socket) return;
+  var pc = getOrCreateLobbyPeer(remoteSocketId);
+  localLobbyStream.getTracks().forEach(function (track) { pc.addTrack(track, localLobbyStream); });
+  pc.createOffer().then(function (offer) {
+    return pc.setLocalDescription(offer);
+  }).then(function () {
+    socket.emit('webrtc_offer', { roomCode: roomCode, targetSocketId: remoteSocketId, sdp: pc.localDescription });
+  }).catch(function (err) { console.warn('Lobby offer error:', err); });
+}
+
+function ensureLobbyConnections(players) {
+  if (!socket || !roomCode || !players || !players.length) return;
+  var myId = socket.id;
+  var currentIds = players.map(function (p) { return p.socketId; }).filter(Boolean);
+  currentIds.forEach(function (sid) {
+    if (sid === myId) return;
+    if (myId < sid) createLobbyOffer(sid);
+  });
+  Object.keys(lobbyPeerConnections).forEach(function (sid) {
+    if (currentIds.indexOf(sid) === -1) {
+      try { lobbyPeerConnections[sid].close(); } catch (e) {}
+      delete lobbyPeerConnections[sid];
+      delete lobbyRemoteStreams[sid];
+    }
+  });
+}
+
+function renderLobbyWithVideos(players) {
+  var list = $('lobby-players');
+  if (!list) return;
+  if (!players || !players.length) {
+    list.innerHTML = '';
+    return;
+  }
+  var myId = socket ? socket.id : '';
+  list.innerHTML = players.map(function (p) {
+    var sid = p.socketId || '';
+    var name = escapeHtml(p.name || '');
+    var isSelf = sid === myId;
+    var stream = isSelf ? localLobbyStream : lobbyRemoteStreams[sid];
+    var hasVideo = !!stream;
+    var videoHtml = hasVideo
+      ? '<video class="lobby-video-el" autoplay playsinline ' + (isSelf ? 'muted ' : '') + 'style="transform:scaleX(' + (isSelf ? '-1' : '1') + ')"></video>'
+      : '<div class="lobby-video-placeholder"></div>';
+    return '<li class="lobby-player" data-socket-id="' + escapeHtml(sid) + '">' +
+      '<div class="lobby-video-wrap">' + videoHtml + '</div>' +
+      '<span class="lobby-player-name">' + name + '</span></li>';
+  }).join('');
+  list.querySelectorAll('.lobby-video-el').forEach(function (video, i) {
+    var li = video.closest('.lobby-player');
+    var sid = li && li.getAttribute('data-socket-id');
+    if (!sid) return;
+    if (sid === myId) video.srcObject = localLobbyStream;
+    else if (lobbyRemoteStreams[sid]) video.srcObject = lobbyRemoteStreams[sid];
+  });
+}
+
 function animateCardsToPlayer(playerIndex, cardCount = 1) {
   const pileEl = $('pile-cards');
   if (!pileEl) return;
@@ -944,6 +1114,7 @@ function init() {
   });
 
   $('btn-leave-lobby').addEventListener('click', () => {
+    stopLobbyMedia();
     roomCode = null;
     myPlayerId = null;
     updateChatVisibility();

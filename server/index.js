@@ -190,6 +190,33 @@ io.on('connection', (socket) => {
     cb?.({ ok: true });
   });
 
+  // WebRTC сигналинг: пересылка offer/answer/ice только внутри комнаты
+  function forwardWebRTC(roomCode, targetSocketId, event, payload) {
+    const code = roomCode && String(roomCode).toUpperCase().trim();
+    const room = getRoom(code);
+    if (!room) return false;
+    const senderInRoom = room.players.some(p => p.socketId === socket.id);
+    const targetInRoom = room.players.some(p => p.socketId === targetSocketId);
+    if (!senderInRoom || !targetInRoom || targetSocketId === socket.id) return false;
+    io.to(targetSocketId).emit(event, { fromSocketId: socket.id, ...payload });
+    return true;
+  }
+
+  socket.on('webrtc_offer', ({ roomCode, targetSocketId, sdp }, cb) => {
+    if (!forwardWebRTC(roomCode, targetSocketId, 'webrtc_offer', { sdp })) return cb?.({ ok: false });
+    cb?.({ ok: true });
+  });
+
+  socket.on('webrtc_answer', ({ roomCode, targetSocketId, sdp }, cb) => {
+    if (!forwardWebRTC(roomCode, targetSocketId, 'webrtc_answer', { sdp })) return cb?.({ ok: false });
+    cb?.({ ok: true });
+  });
+
+  socket.on('webrtc_ice', ({ roomCode, targetSocketId, candidate }, cb) => {
+    if (!forwardWebRTC(roomCode, targetSocketId, 'webrtc_ice', { candidate })) return cb?.({ ok: false });
+    cb?.({ ok: true });
+  });
+
   socket.on('disconnect', () => {
     console.log('Socket disconnected:', socket.id);
 
