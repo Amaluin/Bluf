@@ -201,7 +201,7 @@ body {
     min-height: 48px;
     margin-bottom: 0.35rem;
     padding: 0 2px;
-    max-width: 102px;
+    max-width: 134px;
   }
   .hand .card-in-hand {
     width: 30px;
@@ -1267,6 +1267,8 @@ body {
   align-items: flex-end;
   min-height: 58px;
   margin-bottom: 0.5rem;
+  margin-left: auto;
+  margin-right: auto;
   padding: 0 4px;
   touch-action: manipulation;
   overflow: visible;
@@ -1309,11 +1311,11 @@ body {
   margin-left: 0;
 }
 
-/* Не более 10 карт в ряду — ширина руки под 10 карт, остальные переносятся */
+/* Не более 14 карт в ряду — ширина руки под 14 карт, остальные переносятся; рука по центру */
 .hand {
-  max-width: 108px;
+  max-width: 140px;
 }
-/* 10 карт: 36 + 9*(36-28) = 108 */
+/* 14 карт: 36 + 13*(36-28) = 140 */
 
 /* Узкие экраны (до 360px): компактнее карты */
 @media (max-width: 360px) {
@@ -1327,22 +1329,22 @@ body {
   }
   .hand .card-in-hand .rank { font-size: 0.65rem; }
   .hand .card-in-hand .suit { font-size: 0.55rem; }
-  .hand { min-height: 50px; padding: 0 2px; max-width: 140px; }
+  .hand { min-height: 50px; padding: 0 2px; max-width: 188px; }
 }
-/* 10 карт: 32 + 9*12 = 140 */
+/* 14 карт: 32 + 13*12 = 188 */
 
 /* До 400px: меньше перекрытие — проще попасть по карте */
 @media (max-width: 400px) {
   .hand .card-in-hand { margin-left: -24px; }
-  .hand { max-width: 144px; }
+  .hand { max-width: 192px; }
 }
-/* 10 карт: 36 + 9*12 = 144 */
+/* 14 карт: 36 + 13*12 = 192 */
 
-/* Смартфоны: до 10 карт в ряд, перенос на следующую строку */
+/* Смартфоны: до 14 карт в ряд, перенос на следующую строку */
 @media (max-width: 480px) {
   .hand {
     flex-wrap: wrap;
-    max-width: 284px;
+    max-width: 388px;
     justify-content: center;
     padding-left: 4px;
     padding-right: 4px;
@@ -1512,7 +1514,7 @@ body {
   }
 
   .hand {
-    max-width: 244px;
+    max-width: 332px;
   }
   .hand .card-in-hand {
     width: 46px;
@@ -1540,7 +1542,7 @@ body {
 @media (min-width: 480px) {
   .hand {
     min-height: 76px;
-    max-width: 284px;
+    max-width: 388px;
   }
 
   .hand .card-in-hand {
@@ -1565,7 +1567,7 @@ body {
 @media (min-width: 640px) {
   .hand {
     min-height: 80px;
-    max-width: 324px;
+    max-width: 444px;
   }
 
   .hand .card-in-hand {
