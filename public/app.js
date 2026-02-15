@@ -181,11 +181,25 @@ function updateGameUI(state) {
   console.log('updateGameUI called with state:', state);
 
   $('game-status').textContent = state.isMyTurn ? 'Ваш ход' : `Ход: ${state.players[state.currentPlayerIndex]?.name || '—'}`;
+  const claimEl = $('game-claim');
+  const claimCountEl = $('game-claim-count');
+  const claimCardsEl = $('game-claim-cards');
   if (state.lastClaim) {
-    $('game-claim').textContent = `На столе заявлено: ${state.lastClaim.count} × ${state.lastClaim.rank}`;
-    $('game-claim').classList.remove('hidden');
+    claimEl.classList.remove('hidden');
+    var n = state.lastClaim.count;
+    var rank = state.lastClaim.rank;
+    var cardWord = n === 1 ? 'карта' : (n >= 2 && n <= 4 ? 'карты' : 'карт');
+    claimCountEl.textContent = n + ' ' + cardWord + ' — ' + rank;
+    claimCardsEl.innerHTML = Array(n)
+      .fill(rank)
+      .map(function (r) {
+        return '<span class="claim-chip">' + escapeHtml(r) + '</span>';
+      })
+      .join('');
   } else {
-    $('game-claim').textContent = '';
+    claimEl.classList.add('hidden');
+    claimCountEl.textContent = '';
+    claimCardsEl.innerHTML = '';
   }
 
   const pileCount = state.pileCount || 0;
@@ -370,6 +384,16 @@ function toggleCard(cardId) {
   updateSelectedIndicator();
   redrawHand();
   updateGameUI(gameState);
+  // На смартфонах подскроллить выбранную карту в зону видимости
+  if (!wasSelected && selectedCards.has(cardId)) {
+    requestAnimationFrame(() => {
+      const handEl = $('my-hand');
+      const el = [...handEl.querySelectorAll('.card-in-hand')].find(c => c.dataset.cardId === cardId);
+      if (el && el.classList.contains('selected')) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    });
+  }
 }
 
 function updateSelectedIndicator() {

@@ -74,7 +74,11 @@
         <div class="game-layout">
           <div class="game-info">
             <p id="game-status" class="status-text"></p>
-            <p id="game-claim" class="claim-text"></p>
+            <div id="game-claim" class="claim-block hidden">
+              <span class="claim-label">На столе заявлено</span>
+              <span id="game-claim-count" class="claim-count"></span>
+              <div id="game-claim-cards" class="claim-cards"></div>
+            </div>
           </div>
           <div class="table-center">
             <div class="discard-pile">
