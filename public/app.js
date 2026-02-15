@@ -264,7 +264,6 @@ function connect() {
   });
 
   socket.on('game_started', () => {
-    stopLobbyMedia();
     showScreen('screen-game');
   });
 
@@ -408,6 +407,7 @@ function updateGameUI(state) {
         const cardCount = p.handCount || 0;
         const maxVisible = 8;
         const visibleCards = Math.min(cardCount, maxVisible);
+        const sid = p.socketId || '';
 
         let cardsHtml = '';
         for (let i = 0; i < visibleCards; i++) {
@@ -417,12 +417,50 @@ function updateGameUI(state) {
           cardsHtml += `<div class="opponent-card-badge">+${cardCount - maxVisible}</div>`;
         }
 
-        return `<div class="opponent ${isCurrent ? 'current' : ''}">
-          <div class="opponent-name">${escapeHtml(p.name)}</div>
-          <div class="opponent-hand">${cardsHtml}</div>
+        return `<div class="opponent ${isCurrent ? 'current' : ''}" data-socket-id="${escapeHtml(sid)}">
+          <div class="opponent-video-wrap">
+            <video class="opponent-video-el" autoplay playsinline muted></video>
+            <div class="opponent-video-placeholder"></div>
+          </div>
+          <div class="opponent-info">
+            <div class="opponent-name">${escapeHtml(p.name)}</div>
+            <div class="opponent-hand">${cardsHtml}</div>
+          </div>
         </div>`;
       })
       .join('');
+    opponentsEl.querySelectorAll('.opponent').forEach(function (el) {
+      var sid = el.getAttribute('data-socket-id');
+      var video = el.querySelector('.opponent-video-el');
+      var placeholder = el.querySelector('.opponent-video-placeholder');
+      if (!video || !placeholder) return;
+      if (sid && lobbyRemoteStreams[sid]) {
+        video.srcObject = lobbyRemoteStreams[sid];
+        video.style.display = 'block';
+        placeholder.style.display = 'none';
+      } else {
+        video.srcObject = null;
+        video.style.display = 'none';
+        placeholder.style.display = 'block';
+      }
+    });
+  }
+
+  var myVideoWrap = document.getElementById('my-video-wrap');
+  if (myVideoWrap) {
+    var myV = myVideoWrap.querySelector('.my-video-el');
+    var myPh = myVideoWrap.querySelector('.my-video-placeholder');
+    if (myV && myPh) {
+      if (localLobbyStream) {
+        myV.srcObject = localLobbyStream;
+        myV.style.display = 'block';
+        myPh.style.display = 'none';
+      } else {
+        myV.srcObject = null;
+        myV.style.display = 'none';
+        myPh.style.display = 'block';
+      }
+    }
   }
 
   // Используем redrawHand для отрисовки карт
@@ -517,16 +555,6 @@ function toggleCard(cardId) {
   updateSelectedIndicator();
   redrawHand();
   updateGameUI(gameState);
-  // На смартфонах подскроллить выбранную карту в зону видимости
-  if (!wasSelected && selectedCards.has(cardId)) {
-    requestAnimationFrame(() => {
-      const handEl = $('my-hand');
-      const el = [...handEl.querySelectorAll('.card-in-hand')].find(c => c.dataset.cardId === cardId);
-      if (el && el.classList.contains('selected')) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
-    });
-  }
 }
 
 function updateSelectedIndicator() {
@@ -712,14 +740,36 @@ function sendChatMessage() {
     return;
   }
   console.log('[chat] sending:', { roomCode: roomCode, textLen: text.length, connected: socket.connected });
-  socket.emit('chat_message', { roomCode: roomCode, text: text }, function (err) {
-    if (err) {
-      console.warn('[chat] send callback error:', err);
+  var sendTimeout = setTimeout(function () {
+    sendTimeout = null;
+    console.warn('[chat] send timeout — нет ответа от сервера');
+    showChatError('Сообщение не доставлено. Проверьте связь.');
+  }, 8000);
+  socket.emit('chat_message', { roomCode: roomCode, text: text }, function (res) {
+    if (sendTimeout) {
+      clearTimeout(sendTimeout);
+      sendTimeout = null;
+    }
+    if (res && res.error) {
+      console.warn('[chat] send callback error:', res);
+      if (res.error === 'not_in_room') showChatError('Сессия устарела. Выйдите и зайдите в комнату снова.');
+      else if (res.error === 'room_not_found') showChatError('Комната не найдена.');
+      else showChatError('Не удалось отправить.');
       return;
     }
     console.log('[chat] send ok');
     input.value = '';
   });
+}
+
+function showChatError(msg) {
+  var panel = document.getElementById('chat-panel');
+  if (!panel) return;
+  var el = document.createElement('div');
+  el.className = 'chat-error-toast';
+  el.textContent = msg;
+  panel.appendChild(el);
+  setTimeout(function () { el.remove(); }, 4000);
 }
 
 function requestLobbyMedia() {
@@ -770,6 +820,14 @@ function getOrCreateLobbyPeer(remoteSocketId) {
         if (video) video.srcObject = stream;
         break;
       }
+    }
+    var opponentEls = document.querySelectorAll('.opponent');
+    for (var j = 0; j < opponentEls.length; j++) {
+      if (opponentEls[j].getAttribute('data-socket-id') !== remoteSocketId) continue;
+      var v = opponentEls[j].querySelector('.opponent-video-el');
+      var ph = opponentEls[j].querySelector('.opponent-video-placeholder');
+      if (v) { v.srcObject = stream; v.style.display = 'block'; }
+      if (ph) ph.style.display = 'none';
     }
   };
   pc.onconnectionstatechange = function () {
@@ -1072,6 +1130,7 @@ function init() {
         isHost = true; // Создатель комнаты всегда хост
         updateChatVisibility();
         showScreen('screen-lobby');
+        requestLobbyMedia();
         socket.emit('set_ready', roomCode);
         $('lobby-code').textContent = roomCode;
 
@@ -1096,6 +1155,7 @@ function init() {
         isHost = false; // Присоединившийся игрок не хост
         updateChatVisibility();
         showScreen('screen-lobby');
+        requestLobbyMedia();
         socket.emit('set_ready', roomCode);
 
         // Скрываем кнопку для не-хоста

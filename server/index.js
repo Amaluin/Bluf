@@ -182,7 +182,15 @@ io.on('connection', (socket) => {
       console.log('[chat] error: room_not_found', code);
       return cb?.({ ok: false, error: 'room_not_found' });
     }
-    const player = room.players.find(p => p.socketId === socket.id);
+    let player = room.players.find(p => p.socketId === socket.id);
+    if (!player && io.sockets.adapter.rooms.get(code)?.has(socket.id)) {
+      const disconnectedIndex = room.players.findIndex(p => !io.sockets.sockets.get(p.socketId));
+      if (disconnectedIndex !== -1) {
+        room.players[disconnectedIndex].socketId = socket.id;
+        player = room.players[disconnectedIndex];
+        console.log('[chat] reattached socket to player', player.name, 'in room', code);
+      }
+    }
     if (!player) {
       console.log('[chat] error: not_in_room', socket.id, code);
       return cb?.({ ok: false, error: 'not_in_room' });
@@ -307,6 +315,7 @@ function getGameStateForRoom(room) {
     players: room.players.map((p, i) => ({
       index: i,
       id: p.id,
+      socketId: p.socketId,
       name: p.name,
       handCount: p.hand.length,
     })),
