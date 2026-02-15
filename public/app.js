@@ -287,16 +287,28 @@ function connect() {
     }
   });
 
-  socket.on('dice_rolled', (diceRolls) => {
+  socket.on('dice_rolled', (data) => {
+    const diceRolls = Array.isArray(data) ? data : (data && data.diceRolls);
+    if (!diceRolls || !diceRolls.length) return;
     showScreen('screen-dice');
     const resultsEl = $('dice-results');
     const maxRoll = Math.max(...diceRolls.map(d => d.roll));
-    resultsEl.innerHTML = diceRolls.map(d => `
-      <div class="dice-result ${d.roll === maxRoll ? 'winner' : ''}">
-        <span class="dice-player-name">${escapeHtml(d.name)}</span>
-        <span class="dice-roll-value">${d.roll}</span>
-      </div>
-    `).join('');
+    const isReroll = !Array.isArray(data) && data && data.tieReroll;
+    if (isReroll && resultsEl) {
+      const toast = document.createElement('div');
+      toast.className = 'dice-reroll-toast';
+      toast.textContent = 'Переброс при одинаковом результате';
+      resultsEl.parentElement?.insertBefore(toast, resultsEl);
+      setTimeout(() => toast.remove(), 2500);
+    }
+    if (resultsEl) {
+      resultsEl.innerHTML = diceRolls.map(d => `
+        <div class="dice-result ${d.roll === maxRoll ? 'winner' : ''}">
+          <span class="dice-player-name">${escapeHtml(d.name)}</span>
+          <span class="dice-roll-value">${d.roll}</span>
+        </div>
+      `).join('');
+    }
   });
 
   socket.on('room_closed', () => {

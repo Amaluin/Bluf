@@ -141,7 +141,21 @@ function confirmDiceRoll(roomCode, socketId) {
   const n = room.players.length;
 
   // Определяем порядок игроков по результатам броска кубика
-  const maxRoll = Math.max(...room.players.map(p => p.diceRoll));
+  let maxRoll = Math.max(...room.players.map(p => p.diceRoll));
+  const tiedWithMax = room.players.filter(p => p.diceRoll === maxRoll);
+
+  // Если у нескольких один и тот же максимум — перебрасывают только они
+  if (tiedWithMax.length > 1) {
+    tiedWithMax.forEach(p => {
+      p.diceRoll = Math.floor(Math.random() * 6) + 1;
+    });
+    return {
+      ok: true,
+      tieReroll: true,
+      diceRolls: room.players.map(p => ({ name: p.name, roll: p.diceRoll }))
+    };
+  }
+
   const firstPlayerIndex = room.players.findIndex(p => p.diceRoll === maxRoll);
 
   // Переупорядочиваем игроков по часовой стрелке от первого

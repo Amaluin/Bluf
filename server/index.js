@@ -174,13 +174,17 @@ io.on('connection', (socket) => {
   socket.on('start_game', (roomCode, cb) => {
     const result = startGame(roomCode, socket.id);
     if (!result.ok) return cb?.(result);
-    io.to(roomCode).emit('dice_rolled', result.diceRolls);
+    io.to(roomCode).emit('dice_rolled', { diceRolls: result.diceRolls });
     cb?.({ ok: true, diceRolls: result.diceRolls });
   });
 
   socket.on('confirm_dice_roll', (roomCode, cb) => {
     const result = confirmDiceRoll(roomCode, socket.id);
     if (!result.ok) return cb?.(result);
+    if (result.tieReroll) {
+      io.to(roomCode).emit('dice_rolled', { diceRolls: result.diceRolls, tieReroll: true });
+      return cb?.({ ok: true, tieReroll: true, diceRolls: result.diceRolls });
+    }
     io.to(roomCode).emit('game_started');
     broadcastGameState(roomCode);
     cb?.({ ok: true });
