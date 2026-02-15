@@ -249,14 +249,15 @@ function challenge(roomCode, socketId) {
   // 4 карты одного достоинства сразу уходят в отбой
   moveFourOfAKindToDiscard(loser.hand, room.discard);
 
-  // Если блеф раскрыт — ход тому, кто раскрыл; тот, кто положил последние карты, забирает их обратно (победа отменяется)
+  // Кто ходит после вызова «Не верю»:
+  // — Если вызвавший угадал (был блеф): ход остаётся у него (challengerIndex).
+  // — Если вызвавший ошибся (правда): ход переходит следующему по кругу.
   if (wasLying) {
     room.currentPlayerIndex = challengerIndex;
     if (room.pendingWinnerIndex === lastPlay.playerIndex) {
       room.pendingWinnerIndex = undefined;
     }
   } else {
-    // Не блеф: карты забирает вызвавший «Не верю»; избавившийся от карт выигрывает
     room.currentPlayerIndex = (challengerIndex + 1) % room.players.length;
     if (room.pendingWinnerIndex !== undefined) {
       room.winnerIndex = room.pendingWinnerIndex;
@@ -314,6 +315,8 @@ function trust(roomCode, socketId) {
 
   if (wasRight) {
     // Правда: карты уходят в отбой, ход переходит следующему по часовой стрелке
+    const revealedCards = lastPlay.cardIds;
+    const claimedRank = lastPlay.claimedRank;
     room.discard.push(...allCards);
     room.pile = [];
     room.lastClaim = null;
@@ -324,9 +327,9 @@ function trust(roomCode, socketId) {
       room.state = 'finished';
       room.finalScores = computeFinalScores(room);
       room.pendingWinnerIndex = undefined;
-      return { ok: true, nextPlayerIndex: room.currentPlayerIndex, trustResult: 'discard', gameOver: true, winnerIndex: room.winnerIndex, finalScores: room.finalScores };
+      return { ok: true, nextPlayerIndex: room.currentPlayerIndex, trustResult: 'discard', revealedCards, claimedRank, gameOver: true, winnerIndex: room.winnerIndex, finalScores: room.finalScores };
     }
-    return { ok: true, nextPlayerIndex: room.currentPlayerIndex, trustResult: 'discard' };
+    return { ok: true, nextPlayerIndex: room.currentPlayerIndex, trustResult: 'discard', revealedCards, claimedRank };
   }
 
   // Не правда: карты забирает тот, кто нажал «Верю», избавившийся от карт выигрывает

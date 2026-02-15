@@ -923,6 +923,43 @@ body {
   color: var(--red);
 }
 
+/* Блок результата вызова «Не верю» — показывается на столе только тому, кто нажал */
+.challenge-result-block {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 10px;
+  border: 1px solid var(--gold);
+  animation: slideDown 0.3s ease;
+}
+
+.challenge-result-block.hidden {
+  display: none !important;
+}
+
+.challenge-result-label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--gold);
+  margin-bottom: 0.5rem;
+}
+
+.challenge-result-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.challenge-result-cards .card {
+  width: 52px;
+  height: 72px;
+  min-width: 52px;
+  min-height: 72px;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;

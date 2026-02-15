@@ -208,7 +208,11 @@ io.on('connection', (socket) => {
   socket.on('trust', (roomCode, cb) => {
     const result = trust(roomCode, socket.id);
     if (!result.ok) return cb?.(result);
-    if (result.wasLying) io.to(roomCode).emit('challenge_result', result);
+    if (result.wasLying) {
+      io.to(roomCode).emit('challenge_result', result);
+    } else if (result.trustResult === 'discard' && result.revealedCards) {
+      socket.emit('trust_result', { trustResult: 'discard', revealedCards: result.revealedCards, claimedRank: result.claimedRank });
+    }
     broadcastGameState(roomCode);
     cb?.({ ok: true, ...result });
   });

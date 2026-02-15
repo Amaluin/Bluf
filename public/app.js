@@ -57,6 +57,10 @@ let myHand = [];
 let gameState = null;
 let selectedCards = new Set();
 let isHost = false;
+/** true, если последнее действие — мы нажали «Не верю» (чтобы показать результат вызова только нам) */
+let pendingChallengeByMe = false;
+/** true, если последнее действие — мы нажали «Верю» (чтобы показать результат выбора только нам) */
+let pendingTrustByMe = false;
 
 /* Цвета имён в чате: палитра, у каждого игрока свой цвет */
 var CHAT_COLORS = [
@@ -373,10 +377,30 @@ function connect() {
     updateGameUI(state);
   });
 
+  socket.on('trust_result', (result) => {
+    if (result.trustResult === 'discard' && result.revealedCards && result.revealedCards.length > 0) {
+      showTrustResultOnTable(result.revealedCards, result.claimedRank);
+    }
+  });
+
   socket.on('challenge_result', (result) => {
     const msg = result.wasLying
       ? `Блеф! Заявлено: ${result.claimedRank}. Карты уходят игроку, который положил.`
       : `Правда. Карты забирает вызвавший «Не верю».`;
+
+    // Сразу обновляем, чей ход: при блефе — ход у того, кто раскрыл; иначе ход переходит следующему
+    if (result.nextPlayerIndex !== undefined && gameState) {
+      gameState.currentPlayerIndex = result.nextPlayerIndex;
+      gameState.isMyTurn = (result.nextPlayerIndex === gameState.myIndex);
+      updateGameUI(gameState);
+    }
+
+    // Тому, кто нажал «Не верю» или «Верю» (и оказалось блеф), показываем результат выбора на столе
+    if ((pendingChallengeByMe || pendingTrustByMe) && result.revealedCards && result.revealedCards.length > 0) {
+      showChallengeResultOnTable(result.revealedCards, result.claimedRank, result.wasLying);
+    }
+    pendingChallengeByMe = false;
+    pendingTrustByMe = false;
 
     // Показываем сообщение о результате
     const toast = $('challenge-toast');
@@ -1220,6 +1244,54 @@ function animateCardsToPlayer(playerIndex, cardCount = 1) {
   }
 }
 
+/**
+ * Показывает на столе результат вызова «Не верю» тому, кто его сделал.
+ * @param {string[]} cards - id раскрытых карт
+ * @param {string} claimedRank - заявленный ранг
+ * @param {boolean} wasLying - был ли блеф
+ */
+function showChallengeResultOnTable(cards, claimedRank, wasLying) {
+  var block = document.getElementById('challenge-result-block');
+  var container = document.getElementById('challenge-result-cards');
+  if (!block || !container) return;
+  var label = block.querySelector('.challenge-result-label');
+  if (label) {
+    label.textContent = wasLying
+      ? 'Результат вашего вызова: блеф! Заявлено «' + escapeHtml(claimedRank) + '»'
+      : 'Результат вашего вызова: правда. Заявлено «' + escapeHtml(claimedRank) + '»';
+  }
+  fillChoiceResultBlock(block, container, cards);
+}
+
+/**
+ * Показывает на столе результат «Верю» (правда, карты в отбой) тому, кто нажал.
+ * @param {string[]} cards - id карт, ушедших в отбой
+ * @param {string} claimedRank - заявленный ранг
+ */
+function showTrustResultOnTable(cards, claimedRank) {
+  var block = document.getElementById('challenge-result-block');
+  var container = document.getElementById('challenge-result-cards');
+  if (!block || !container) return;
+  var label = block.querySelector('.challenge-result-label');
+  if (label) {
+    label.textContent = 'Результат вашего выбора: правда. Карты в отбой. Заявлено «' + escapeHtml(claimedRank) + '»';
+  }
+  fillChoiceResultBlock(block, container, cards);
+}
+
+function fillChoiceResultBlock(block, container, cards) {
+  container.innerHTML = '';
+  cards.forEach(function (cardId, index) {
+    var card = renderCard(cardId, { inHand: false });
+    card.style.animation = 'cardReveal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ' + (index * 0.1) + 's backwards';
+    container.appendChild(card);
+  });
+  block.classList.remove('hidden');
+  setTimeout(function () {
+    block.classList.add('hidden');
+  }, 4500);
+}
+
 function showRevealedCards(cards, onComplete) {
   // Создаем оверлей для показа карт
   const overlay = document.createElement('div');
@@ -1570,12 +1642,14 @@ function init() {
   $('lobby-code').addEventListener('click', copyRoomCode);
 
   $('btn-trust').addEventListener('click', () => {
+    pendingTrustByMe = true;
     socket.emit('trust', roomCode, (res) => {
       if (!res?.ok) console.warn('Trust failed', res);
     });
   });
 
   $('btn-challenge').addEventListener('click', () => {
+    pendingChallengeByMe = true;
     socket.emit('challenge', roomCode, (res) => {
       if (!res?.ok) console.warn('Challenge failed', res);
     });
