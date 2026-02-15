@@ -78,8 +78,13 @@ function getLobbyIceServers() {
     urls.forEach(function (u) {
       if (u) servers.push({ urls: u, username: user, credential: cred });
     });
+  } else if (typeof window !== 'undefined' && (window.innerWidth <= 480 || /Android|iPhone|iPad/i.test(navigator.userAgent))) {
+    console.warn('[Bluf] Смартфон без TURN — видео/звук могут не работать. Настройте config.js (см. docs/TURN.md).');
   }
-  return { iceServers: servers };
+  return {
+    iceServers: servers,
+    iceCandidatePoolSize: 2
+  };
 }
 var LOBBY_STUN = getLobbyIceServers();
 var lobbyMediaRequested = false;
@@ -346,6 +351,11 @@ function connect() {
     }
     ensureChatColors([{ name: data.playerName }]);
     appendChatMessage(data.playerName, data.text);
+    var chatWidget = document.getElementById('chat-widget');
+    if (chatWidget && !chatWidget.classList.contains('is-open')) {
+      chatUnreadCount += 1;
+      updateChatUnreadBadge();
+    }
   });
 
   socket.on('game_started', () => {
@@ -833,6 +843,22 @@ function getChatColorForName(playerName) {
   return chatNameToColor[name] || CHAT_COLORS[0];
 }
 
+var chatUnreadCount = 0;
+
+function updateChatUnreadBadge() {
+  var badge = document.getElementById('chat-unread-badge');
+  if (!badge) return;
+  if (chatUnreadCount > 0) {
+    badge.textContent = chatUnreadCount > 99 ? '99+' : String(chatUnreadCount);
+    badge.classList.remove('hidden');
+    badge.setAttribute('aria-hidden', 'false');
+  } else {
+    badge.textContent = '0';
+    badge.classList.add('hidden');
+    badge.setAttribute('aria-hidden', 'true');
+  }
+}
+
 function updateChatVisibility() {
   var w = document.getElementById('chat-widget');
   if (!w) return;
@@ -841,6 +867,8 @@ function updateChatVisibility() {
   } else {
     w.classList.add('hidden');
     w.classList.remove('is-open');
+    chatUnreadCount = 0;
+    updateChatUnreadBadge();
     var list = document.getElementById('chat-messages');
     if (list) list.innerHTML = '';
   }
@@ -1567,7 +1595,11 @@ function init() {
   if (chatToggle && chatWidget) {
     chatToggle.addEventListener('click', function () {
       chatWidget.classList.toggle('is-open');
-      if (chatWidget.classList.contains('is-open')) chatInput && chatInput.focus();
+      if (chatWidget.classList.contains('is-open')) {
+        chatUnreadCount = 0;
+        updateChatUnreadBadge();
+        chatInput && chatInput.focus();
+      }
     });
   }
   if (chatSend) chatSend.addEventListener('click', sendChatMessage);
