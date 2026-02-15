@@ -1219,8 +1219,8 @@ body {
 
 .opponent-video-wrap {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.4);
@@ -1242,15 +1242,26 @@ body {
   opacity: 0.6;
 }
 
-.my-video-wrap { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.35rem; }
-.my-video-circle { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,0.4); border: 1px solid var(--felt-border); flex-shrink: 0; }
+.my-video-wrap { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+.my-video-circle { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,0.4); border: 1px solid var(--felt-border); flex-shrink: 0; }
 .my-video-el { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: none; }
 .my-video-placeholder { width: 100%; height: 100%; background: var(--felt-border); opacity: 0.6; }
+.my-video-controls { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
 .my-video-label { font-size: 0.8rem; color: var(--text-muted); }
+.my-video-buttons { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.my-video-buttons .btn { font-size: 0.7rem; padding: 0.2rem 0.4rem; min-height: auto; }
+.my-video-buttons .lobby-btn-off { opacity: 0.7; }
 
 .opponent-info {
   flex: 1;
   min-width: 0;
+}
+
+.game-btn-sound {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.4rem;
+  min-height: auto;
+  margin-bottom: 0.2rem;
 }
 
 .opponent-name {

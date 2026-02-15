@@ -460,6 +460,7 @@ function updateGameUI(state) {
           cardsHtml += `<div class="opponent-card-badge">+${cardCount - maxVisible}</div>`;
         }
 
+        const soundLabel = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
         return `<div class="opponent ${isCurrent ? 'current' : ''}" data-socket-id="${escapeHtml(sid)}">
           <div class="opponent-video-wrap">
             <video class="opponent-video-el" autoplay playsinline muted></video>
@@ -467,6 +468,7 @@ function updateGameUI(state) {
           </div>
           <div class="opponent-info">
             <div class="opponent-name">${escapeHtml(p.name)}</div>
+            <button type="button" class="btn btn-ghost btn-sm game-btn-sound" data-socket-id="${escapeHtml(sid)}">${escapeHtml(soundLabel)}</button>
             <div class="opponent-hand">${cardsHtml}</div>
           </div>
         </div>`;
@@ -479,6 +481,7 @@ function updateGameUI(state) {
       if (!video || !placeholder) return;
       if (sid && lobbyRemoteStreams[sid]) {
         video.srcObject = lobbyRemoteStreams[sid];
+        video.muted = !!lobbyRemoteMuted[sid];
         video.style.display = 'block';
         placeholder.style.display = 'none';
       } else {
@@ -503,6 +506,17 @@ function updateGameUI(state) {
         myV.style.display = 'none';
         myPh.style.display = 'block';
       }
+    }
+    var myState = getMyLobbyCamMicState();
+    var camBtn = myVideoWrap.querySelector('.game-btn-cam');
+    var micBtn = myVideoWrap.querySelector('.game-btn-mic');
+    if (camBtn) {
+      camBtn.textContent = 'Камера ' + (myState.cam ? 'вкл' : 'выкл');
+      camBtn.classList.toggle('lobby-btn-off', !myState.cam);
+    }
+    if (micBtn) {
+      micBtn.textContent = 'Микрофон ' + (myState.mic ? 'вкл' : 'выкл');
+      micBtn.classList.toggle('lobby-btn-off', !myState.mic);
     }
   }
 
@@ -1372,6 +1386,46 @@ function init() {
       }
     });
   }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.game-btn-cam, .game-btn-mic, .game-btn-sound');
+    if (!btn) return;
+    if (btn.classList.contains('game-btn-cam') || btn.classList.contains('game-btn-mic')) {
+      if (!localLobbyStream) return;
+      var action = btn.getAttribute('data-action');
+      if (action === 'cam') {
+        localLobbyStream.getVideoTracks().forEach(function (t) { t.enabled = !t.enabled; });
+      } else if (action === 'mic') {
+        localLobbyStream.getAudioTracks().forEach(function (t) { t.enabled = !t.enabled; });
+      }
+      var myState = getMyLobbyCamMicState();
+      var wrap = document.getElementById('my-video-wrap');
+      if (wrap) {
+        var camBtn = wrap.querySelector('.game-btn-cam');
+        var micBtn = wrap.querySelector('.game-btn-mic');
+        if (camBtn) {
+          camBtn.textContent = 'Камера ' + (myState.cam ? 'вкл' : 'выкл');
+          camBtn.classList.toggle('lobby-btn-off', !myState.cam);
+        }
+        if (micBtn) {
+          micBtn.textContent = 'Микрофон ' + (myState.mic ? 'вкл' : 'выкл');
+          micBtn.classList.toggle('lobby-btn-off', !myState.mic);
+        }
+      }
+      return;
+    }
+    if (btn.classList.contains('game-btn-sound')) {
+      var sid = btn.getAttribute('data-socket-id');
+      if (!sid) return;
+      lobbyRemoteMuted[sid] = !lobbyRemoteMuted[sid];
+      var opponent = btn.closest('.opponent');
+      if (opponent) {
+        var video = opponent.querySelector('.opponent-video-el');
+        if (video) video.muted = !!lobbyRemoteMuted[sid];
+      }
+      btn.textContent = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
+    }
+  });
 
   // Копирование кода комнаты при клике
   $('lobby-code').addEventListener('click', copyRoomCode);
