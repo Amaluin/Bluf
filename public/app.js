@@ -106,6 +106,7 @@ function connect() {
       socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
         if (res?.ok) {
           console.log('Successfully rejoined room');
+          if (res.roomCode) roomCode = res.roomCode;
           myIndex = res.playerIndex;
 
           // Запрашиваем текущее состояние игры
@@ -114,6 +115,9 @@ function connect() {
             myIndex = res.gameState.myIndex;
             myHand = sortHand(res.gameState.myHand || []);
             selectedCards.clear();
+            if (res.gameState.code) roomCode = res.gameState.code;
+            updateChatVisibility();
+            ensureChatColors(res.gameState.players || []);
 
             // Определяем текущий экран на основе состояния
             if (res.gameState.state === 'playing') {
@@ -260,7 +264,9 @@ function connect() {
     myIndex = state.myIndex;
     myHand = sortHand(state.myHand || []);
     selectedCards.clear();
+    if (state.code) roomCode = state.code;
     if (state.players && state.players.length) ensureChatColors(state.players);
+    updateChatVisibility();
     updateGameUI(state);
   });
 

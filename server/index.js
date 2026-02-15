@@ -289,6 +289,7 @@ function getRoomState(roomCode) {
 function getGameStateForRoom(room) {
   if (!room) return null;
   const publicState = {
+    code: room.code,
     state: room.state,
     currentPlayerIndex: room.currentPlayerIndex,
     lastClaim: room.lastClaim,
