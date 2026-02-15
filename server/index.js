@@ -63,8 +63,9 @@ io.on('connection', (socket) => {
     io.to(code).emit('room_updated', getRoomState(code));
   });
 
-  socket.on('rejoin_room', (roomCode, cb) => {
-    const code = (roomCode || '').toUpperCase().trim();
+  socket.on('rejoin_room', (data, cb) => {
+    const roomCodeRaw = typeof data === 'object' && data !== null ? data.roomCode : data;
+    const code = (roomCodeRaw || '').toUpperCase().trim();
     const room = getRoom(code);
     if (!room) return cb?.({ ok: false, error: 'room_not_found' });
 

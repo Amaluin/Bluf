@@ -27,6 +27,7 @@ function sortHand(cardIds) {
 
 let socket = null;
 let roomCode = null;
+let myPlayerId = null; // Уникальный ID игрока для переподключения
 let myIndex = -1;
 let myHand = [];
 let gameState = null;
@@ -93,9 +94,9 @@ function connect() {
     console.log('Connected');
 
     // Если мы были в комнате, пытаемся переподключиться
-    if (roomCode) {
-      console.log('Reconnecting to room:', roomCode);
-      socket.emit('rejoin_room', roomCode, (res) => {
+    if (roomCode && myPlayerId) {
+      console.log('Reconnecting to room:', roomCode, 'with playerId:', myPlayerId);
+      socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
         if (res?.ok) {
           console.log('Successfully rejoined room');
           myIndex = res.playerIndex;
@@ -120,6 +121,7 @@ function connect() {
         } else {
           console.log('Failed to rejoin room, returning to welcome screen');
           roomCode = null;
+          myPlayerId = null;
           showScreen('screen-welcome');
         }
       });
@@ -128,13 +130,12 @@ function connect() {
 
   socket.on('disconnect', (reason) => {
     console.log('Disconnected:', reason);
-    // Показываем индикатор отключения
-    showConnectionStatus(false);
+    showConnectionStatus(false, { inRoom: !!roomCode });
   });
 
   socket.on('reconnect', (attemptNumber) => {
     console.log('Reconnected after', attemptNumber, 'attempts');
-    showConnectionStatus(true);
+    showConnectionStatus(true, {});
   });
 
   socket.on('reconnect_attempt', (attemptNumber) => {
@@ -186,6 +187,7 @@ function connect() {
 
   socket.on('room_closed', () => {
     roomCode = null;
+    myPlayerId = null;
     updateChatVisibility();
     showScreen('screen-welcome');
   });
@@ -524,7 +526,9 @@ function redrawHand() {
   });
 }
 
-function showConnectionStatus(connected) {
+let reconnectionTimeoutId = null;
+
+function showConnectionStatus(connected, options) {
   let statusEl = $('connection-status');
 
   if (!statusEl) {
@@ -534,19 +538,51 @@ function showConnectionStatus(connected) {
     document.body.appendChild(statusEl);
   }
 
+  if (reconnectionTimeoutId) {
+    clearTimeout(reconnectionTimeoutId);
+    reconnectionTimeoutId = null;
+  }
+
   if (connected) {
     statusEl.textContent = 'Подключено';
     statusEl.classList.add('connected');
-    statusEl.classList.remove('disconnected');
+    statusEl.classList.remove('disconnected', 'retry');
+    statusEl.onclick = null;
+    statusEl.title = '';
 
-    // Скрываем через 2 секунды
     setTimeout(() => {
       statusEl.classList.add('hidden');
     }, 2000);
   } else {
-    statusEl.textContent = 'Переподключение...';
+    const inRoom = options && options.inRoom;
     statusEl.classList.add('disconnected');
     statusEl.classList.remove('connected', 'hidden');
+
+    if (inRoom) {
+      statusEl.textContent = 'Переподключение...';
+      statusEl.classList.remove('retry');
+      statusEl.onclick = null;
+      statusEl.title = '';
+
+      reconnectionTimeoutId = setTimeout(() => {
+        reconnectionTimeoutId = null;
+        statusEl.textContent = 'Нет связи. Нажмите для повтора';
+        statusEl.classList.add('retry');
+        statusEl.title = 'Нажмите, чтобы переподключиться';
+        statusEl.onclick = () => {
+          if (socket && !socket.connected) {
+            statusEl.textContent = 'Переподключение...';
+            statusEl.classList.remove('retry');
+            statusEl.onclick = null;
+            socket.connect();
+          }
+        };
+      }, 20000);
+    } else {
+      statusEl.textContent = 'Нет соединения';
+      statusEl.title = 'Соединение восстановится автоматически';
+      statusEl.onclick = null;
+    }
   }
 }
 
@@ -774,16 +810,20 @@ function init() {
       } else {
         // Если соединение активно, запрашиваем обновление состояния
         console.log('Socket connected, requesting state update...');
-        socket.emit('rejoin_room', roomCode, (res) => {
+        socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
           if (res?.ok && res.gameState) {
             gameState = res.gameState;
-            myIndex = res.gameState.myIndex;
+            myIndex = res.gameState.myIndex ?? res.playerIndex;
             myHand = sortHand(res.gameState.myHand || []);
             selectedCards.clear();
 
             if (res.gameState.state === 'playing') {
               showScreen('screen-game');
               updateGameUI(res.gameState);
+            } else if (res.gameState.state === 'dice_roll') {
+              showScreen('screen-dice');
+            } else if (res.gameState.state === 'lobby') {
+              showScreen('screen-lobby');
             }
           }
         });
@@ -799,16 +839,20 @@ function init() {
       if (!socket.connected) {
         socket.connect();
       } else {
-        socket.emit('rejoin_room', roomCode, (res) => {
+        socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
           if (res?.ok && res.gameState) {
             gameState = res.gameState;
-            myIndex = res.gameState.myIndex;
+            myIndex = res.gameState.myIndex ?? res.playerIndex;
             myHand = sortHand(res.gameState.myHand || []);
             selectedCards.clear();
 
             if (res.gameState.state === 'playing') {
               showScreen('screen-game');
               updateGameUI(res.gameState);
+            } else if (res.gameState.state === 'dice_roll') {
+              showScreen('screen-dice');
+            } else if (res.gameState.state === 'lobby') {
+              showScreen('screen-lobby');
             }
           }
         });
@@ -820,13 +864,20 @@ function init() {
   window.addEventListener('focus', () => {
     if (roomCode && socket && socket.connected) {
       console.log('Window focused, checking state...');
-      socket.emit('rejoin_room', roomCode, (res) => {
-        if (res?.ok && res.gameState && res.gameState.state === 'playing') {
+      socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
+        if (res?.ok && res.gameState) {
           gameState = res.gameState;
-          myIndex = res.gameState.myIndex;
+          myIndex = res.gameState.myIndex ?? res.playerIndex;
           myHand = sortHand(res.gameState.myHand || []);
           selectedCards.clear();
           updateGameUI(res.gameState);
+          if (res.gameState.state === 'playing') {
+            showScreen('screen-game');
+          } else if (res.gameState.state === 'dice_roll') {
+            showScreen('screen-dice');
+          } else if (res.gameState.state === 'lobby') {
+            showScreen('screen-lobby');
+          }
         }
       });
     }
@@ -837,6 +888,7 @@ function init() {
     socket.emit('create_room', name, (res) => {
       if (res?.ok) {
         roomCode = res.roomCode;
+        myPlayerId = res.playerId || null;
         myIndex = res.playerIndex;
         isHost = true; // Создатель комнаты всегда хост
         updateChatVisibility();
@@ -859,6 +911,7 @@ function init() {
     socket.emit('join_room', { roomCode: code, playerName: name }, (res) => {
       if (res?.ok) {
         roomCode = res.roomCode;
+        myPlayerId = res.playerId || null;
         myIndex = res.playerIndex;
         isHost = false; // Присоединившийся игрок не хост
         updateChatVisibility();
@@ -892,6 +945,7 @@ function init() {
 
   $('btn-leave-lobby').addEventListener('click', () => {
     roomCode = null;
+    myPlayerId = null;
     updateChatVisibility();
     showScreen('screen-welcome');
   });
@@ -913,6 +967,7 @@ function init() {
 
   $('btn-leave-game').addEventListener('click', () => {
     roomCode = null;
+    myPlayerId = null;
     updateChatVisibility();
     showScreen('screen-welcome');
   });

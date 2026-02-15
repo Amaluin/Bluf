@@ -1904,6 +1904,12 @@ body {
   animation: slideInRight 0.3s ease, pulse 1.5s ease-in-out infinite;
 }
 
+.connection-status.retry {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .connection-status.hidden {
   opacity: 0;
   transform: translateX(150%);
