@@ -174,36 +174,50 @@ io.on('connection', (socket) => {
     cb?.({ ok: true });
   });
 
-  socket.on('chat_message', ({ roomCode, text }, cb) => {
-    const code = roomCode && String(roomCode).toUpperCase().trim();
-    console.log('[chat] received from', socket.id, { roomCode: code, textLen: (text && String(text).length) || 0 });
-    const room = getRoom(code);
-    if (!room) {
-      console.log('[chat] error: room_not_found', code);
-      return cb?.({ ok: false, error: 'room_not_found' });
-    }
-    let player = room.players.find(p => p.socketId === socket.id);
-    if (!player && io.sockets.adapter.rooms.get(code)?.has(socket.id)) {
-      const disconnectedIndex = room.players.findIndex(p => !io.sockets.sockets.get(p.socketId));
-      if (disconnectedIndex !== -1) {
-        room.players[disconnectedIndex].socketId = socket.id;
-        player = room.players[disconnectedIndex];
-        console.log('[chat] reattached socket to player', player.name, 'in room', code);
+  socket.on('chat_message', (data, cb) => {
+    const ack = typeof cb === 'function' ? cb : null;
+    try {
+      const roomCode = data && data.roomCode;
+      const text = data && data.text;
+      const code = roomCode && String(roomCode).toUpperCase().trim();
+      console.log('[chat] received from', socket.id, { roomCode: code, textLen: (text && String(text).length) || 0 });
+      if (!code) {
+        ack?.({ ok: false, error: 'room_not_found' });
+        return;
       }
+      const room = getRoom(code);
+      if (!room) {
+        console.log('[chat] error: room_not_found', code);
+        ack?.({ ok: false, error: 'room_not_found' });
+        return;
+      }
+      let player = room.players.find(p => p.socketId === socket.id);
+      if (!player && io.sockets.adapter.rooms.get(code)?.has(socket.id)) {
+        const disconnectedIndex = room.players.findIndex(p => !io.sockets.sockets.get(p.socketId));
+        if (disconnectedIndex !== -1) {
+          room.players[disconnectedIndex].socketId = socket.id;
+          player = room.players[disconnectedIndex];
+          console.log('[chat] reattached socket to player', player.name, 'in room', code);
+        }
+      }
+      if (!player) {
+        console.log('[chat] error: not_in_room', socket.id, code);
+        ack?.({ ok: false, error: 'not_in_room' });
+        return;
+      }
+      const msg = String(text ?? '').trim();
+      if (!msg) {
+        ack?.({ ok: true });
+        return;
+      }
+      const payload = { playerName: player.name, playerId: player.id, text: msg };
+      console.log('[chat] broadcast to room', code, payload.playerName);
+      io.to(code).emit('chat_message', payload);
+      ack?.({ ok: true });
+    } catch (err) {
+      console.error('[chat] handler error', err);
+      ack?.({ ok: false, error: 'server_error' });
     }
-    if (!player) {
-      console.log('[chat] error: not_in_room', socket.id, code);
-      return cb?.({ ok: false, error: 'not_in_room' });
-    }
-    const msg = String(text ?? '').trim();
-    if (!msg) {
-      console.log('[chat] empty msg, ack only');
-      return cb?.({ ok: true });
-    }
-    const payload = { playerName: player.name, playerId: player.id, text: msg };
-    console.log('[chat] broadcast to room', code, payload.playerName);
-    io.to(code).emit('chat_message', payload);
-    cb?.({ ok: true });
   });
 
   // WebRTC сигналинг: пересылка offer/answer/ice только внутри комнаты
@@ -331,6 +345,12 @@ function getGameStateForRoom(room) {
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
-httpServer.listen(PORT, HOST, () => {
-  console.log(`Bluf: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
-});
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__dirname, 'index.js');
+if (isMain) {
+  httpServer.listen(PORT, HOST, () => {
+    console.log(`Bluf: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${httpServer.address().port}`);
+  });
+}
+
+export { httpServer, io };

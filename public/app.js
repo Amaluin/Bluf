@@ -744,7 +744,7 @@ function sendChatMessage() {
     sendTimeout = null;
     console.warn('[chat] send timeout — нет ответа от сервера');
     showChatError('Сообщение не доставлено. Проверьте связь.');
-  }, 8000);
+  }, 12000);
   socket.emit('chat_message', { roomCode: roomCode, text: text }, function (res) {
     if (sendTimeout) {
       clearTimeout(sendTimeout);
