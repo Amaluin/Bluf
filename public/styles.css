@@ -297,6 +297,9 @@ body {
   align-items: center;
   justify-content: center;
   padding: 0.75rem;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .screen {
@@ -631,8 +634,8 @@ body {
 
 .lobby-video-wrap {
   flex-shrink: 0;
-  width: 208px;
-  height: 208px;
+  width: 104px;
+  height: 104px;
   border-radius: 50%;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.35);
@@ -823,14 +826,19 @@ body {
   }
 }
 
-/* Game layout */
+/* Game layout: не шире экрана, без горизонтального скролла */
+#screen-game.screen.active {
+  max-width: 100%;
+  overflow-x: hidden;
+}
 .game-layout {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
   width: 100%;
-  max-width: 480px;
+  max-width: 100%;
   min-height: 50dvh;
+  box-sizing: border-box;
 }
 
 .game-info {
@@ -1119,30 +1127,33 @@ body {
 
 .opponents {
   position: relative;
-  min-height: 120px;
-  margin: 0.4rem 0;
+  min-height: 80px;
+  margin: 0.3rem 0;
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .opponent {
-  padding: 0.3rem 0.5rem;
+  padding: 0.2rem 0.35rem;
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.3));
-  border-radius: 8px;
-  font-size: 0.7rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
   color: var(--cream);
-  border: 2px solid rgba(201, 162, 39, 0.2);
+  border: 1px solid rgba(201, 162, 39, 0.2);
   transition: all 0.3s ease;
   animation: fadeIn 0.4s ease backwards;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  min-width: 60px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  gap: 0.15rem;
+  min-width: 48px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   position: absolute;
   backdrop-filter: blur(4px);
+  box-sizing: border-box;
 }
 
 /* РџРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёРµ РёРіСЂРѕРєРѕРІ РІРѕРєСЂСѓРі РѕРІР°Р»СЊРЅРѕРіРѕ СЃС‚РѕР»Р° */
@@ -1155,7 +1166,7 @@ body {
 
 .opponent:nth-child(2) {
   top: 20%;
-  right: 5%;
+  right: 1%;
   animation-delay: 0.1s;
 }
 
@@ -1168,13 +1179,13 @@ body {
 
 .opponent:nth-child(4) {
   bottom: 20%;
-  right: 5%;
+  right: 1%;
   animation-delay: 0.2s;
 }
 
 .opponent:nth-child(5) {
   bottom: 20%;
-  left: 5%;
+  left: 1%;
   animation-delay: 0.25s;
 }
 
@@ -1200,13 +1211,13 @@ body {
 
 .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(2) {
   bottom: 15%;
-  right: 10%;
+  right: 2%;
   transform: none;
 }
 
 .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(3) {
   bottom: 15%;
-  left: 10%;
+  left: 2%;
   transform: none;
 }
 
@@ -1219,8 +1230,8 @@ body {
 
 .opponent-video-wrap {
   flex-shrink: 0;
-  width: 72px;
-  height: 72px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.4);
@@ -1243,7 +1254,7 @@ body {
 }
 
 .my-video-wrap { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
-.my-video-circle { width: 72px; height: 72px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,0.4); border: 1px solid var(--felt-border); flex-shrink: 0; }
+.my-video-circle { width: 48px; height: 48px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,0.4); border: 1px solid var(--felt-border); flex-shrink: 0; }
 .my-video-el { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: none; }
 .my-video-placeholder { width: 100%; height: 100%; background: var(--felt-border); opacity: 0.6; }
 .my-video-controls { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
@@ -1268,11 +1279,11 @@ body {
   font-weight: 600;
   color: var(--cream);
   text-align: center;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 70px;
+  max-width: 56px;
 }
 
 .opponent-hand {
@@ -1280,13 +1291,13 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
-  height: 24px;
-  min-width: 45px;
+  height: 20px;
+  min-width: 36px;
 }
 
 .opponent-card-back {
-  width: 18px;
-  height: 24px;
+  width: 14px;
+  height: 20px;
   border-radius: 2px;
   background:
     linear-gradient(135deg, var(--gold-dim) 0%, var(--gold) 50%, var(--gold-dim) 100%),
@@ -1294,7 +1305,7 @@ body {
     linear-gradient(145deg, #2a4a3a 0%, #1e3a2d 100%);
   border: 1px solid var(--gold-dim);
   box-shadow: 0 1px 3px var(--shadow);
-  margin-left: -7px;
+  margin-left: -5px;
   position: relative;
 }
 
