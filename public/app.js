@@ -5,7 +5,12 @@
 
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const SUITS = { '♠': 'spades', '♥': 'hearts', '♦': 'diamonds', '♣': 'clubs' };
-const SUIT_ORDER = ['♠', '♥', '♦', '♣'];
+// Порядок мастей: чёрная–красная чередуются (♠♥♣♦)
+const SUIT_ORDER = ['♠', '♥', '♣', '♦'];
+
+function cardWordRu(n) {
+  return n === 1 ? 'карта' : (n >= 2 && n <= 4 ? 'карты' : 'карт');
+}
 
 function sortHand(cardIds) {
   if (!Array.isArray(cardIds) || cardIds.length === 0) return cardIds;
@@ -20,8 +25,8 @@ function sortHand(cardIds) {
   return [...cardIds].sort((a, b) => {
     const pa = parseCardId(a);
     const pb = parseCardId(b);
-    const suitDiff = suitValue(pa.suit) - suitValue(pb.suit);
-    return suitDiff !== 0 ? suitDiff : rankValue(pa.rank) - rankValue(pb.rank);
+    const rankDiff = rankValue(pa.rank) - rankValue(pb.rank);
+    return rankDiff !== 0 ? rankDiff : suitValue(pa.suit) - suitValue(pb.suit);
   });
 }
 
@@ -303,6 +308,18 @@ function connect() {
     showScreen('screen-welcome');
   });
 
+  socket.on('player_disconnected', (data) => {
+    if (data && data.playerName) {
+      appendSystemMessage('Игрок ' + escapeHtml(data.playerName) + ' отключился. Ожидание переподключения (30 сек)…');
+    }
+  });
+
+  socket.on('player_left', (data) => {
+    if (data && data.playerName) {
+      appendSystemMessage('Игрок ' + escapeHtml(data.playerName) + ' вышел из игры.');
+    }
+  });
+
   socket.on('chat_message', (data) => {
     console.log('[chat] received:', data);
     if (!data || !data.playerName) {
@@ -473,6 +490,7 @@ function updateGameUI(state) {
         }
 
         const soundLabel = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
+        const cardCountText = cardCount + ' ' + cardWordRu(cardCount);
         return `<div class="opponent ${isCurrent ? 'current' : ''}" data-socket-id="${escapeHtml(sid)}">
           <div class="opponent-video-wrap">
             <video class="opponent-video-el" autoplay playsinline muted></video>
@@ -480,6 +498,7 @@ function updateGameUI(state) {
           </div>
           <div class="opponent-info">
             <div class="opponent-name">${escapeHtml(p.name)}</div>
+            <div class="opponent-card-count">${escapeHtml(cardCountText)}</div>
             <button type="button" class="btn btn-ghost btn-sm game-btn-sound" data-socket-id="${escapeHtml(sid)}">${escapeHtml(soundLabel)}</button>
             <div class="opponent-hand">${cardsHtml}</div>
           </div>
@@ -598,6 +617,27 @@ function updateGameUI(state) {
     $('btn-trust').disabled = true;
     $('btn-challenge').disabled = true;
   }
+
+  // Финальная таблица очков (когда игра завершена с подсчётом)
+  const overlay = $('game-final-overlay');
+  const tbody = $('game-final-tbody');
+  const winnerEl = $('game-final-winner');
+  if (overlay && tbody && winnerEl) {
+    if (state.state === 'finished' && state.finalScores && state.finalScores.length > 0) {
+      overlay.classList.remove('hidden');
+      const winner = state.winnerIndex >= 0 ? state.players[state.winnerIndex] : null;
+      winnerEl.textContent = winner ? `Победитель: ${winner.name}` : 'Игра окончена';
+      tbody.innerHTML = state.finalScores.map((row, i) => {
+        const isWinner = state.winnerIndex >= 0 && row.playerIndex === state.winnerIndex;
+        return `<tr class="${isWinner ? 'final-winner-row' : ''}">
+          <td>${escapeHtml(row.name)}</td>
+          <td>${row.points}</td>
+        </tr>`;
+      }).join('');
+    } else {
+      overlay.classList.add('hidden');
+    }
+  }
 }
 
 function toggleCard(cardId) {
@@ -647,6 +687,12 @@ function updateSelectedIndicator() {
 }
 
 function redrawHand() {
+  const handCountEl = document.getElementById('my-hand-count');
+  if (handCountEl) {
+    const n = myHand.length;
+    handCountEl.textContent = n + ' ' + cardWordRu(n);
+    handCountEl.classList.toggle('hidden', n === 0);
+  }
   const handEl = $('my-hand');
   handEl.innerHTML = '';
   myHand.forEach((cardId, index) => {
@@ -804,6 +850,16 @@ function appendChatMessage(playerName, text) {
   list.scrollTop = list.scrollHeight;
 }
 
+function appendSystemMessage(text) {
+  var list = document.getElementById('chat-messages');
+  if (!list) return;
+  var msg = document.createElement('div');
+  msg.className = 'chat-message chat-message-system';
+  msg.textContent = text;
+  list.appendChild(msg);
+  list.scrollTop = list.scrollHeight;
+}
+
 var lastSentChatText = '';
 var lastSentChatTime = 0;
 
@@ -887,7 +943,15 @@ function requestLobbyMedia() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     return Promise.resolve();
   }
-  return navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+  var audioConstraints = {
+    echoCancellation: true,
+    autoGainControl: true,
+    noiseSuppression: true
+  };
+  return navigator.mediaDevices.getUserMedia({
+    video: true,
+    audio: audioConstraints
+  })
     .then(function (stream) {
       localLobbyStream = stream;
     })

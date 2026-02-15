@@ -3,7 +3,7 @@
  * Один экземпляр — одна комната (для простоты можно масштабировать через Map по roomId).
  */
 
-import { dealCards, cardsMatchClaim, getRankFromId } from './game.js';
+import { dealCards, cardsMatchClaim, getRankFromId, handPoints } from './game.js';
 
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 
@@ -38,6 +38,16 @@ function moveFourOfAKindToDiscard(hand, discard) {
     }
   }
   return discardedRanks;
+}
+
+/** Финальные очки: сумма достоинств карт в руке (2–10 = номинал, В=11, Д=12, К=13, Т=14). */
+function computeFinalScores(room) {
+  if (!room || !room.players) return [];
+  return room.players.map((p, i) => ({
+    playerIndex: i,
+    name: p.name,
+    points: handPoints(p.hand),
+  })).sort((a, b) => a.points - b.points); // по возрастанию очков (победитель 0 — первый)
 }
 
 const rooms = new Map();
@@ -152,6 +162,7 @@ function confirmDiceRoll(roomCode, socketId) {
   room.discard = [];
   room.lastClaim = null;
   room.winnerIndex = -1;
+  room.pendingWinnerIndex = undefined; // кто выиграет, если следующий скажет Верю или ошибётся с Не верю
 
   // 4 карты одного достоинства сразу уходят в отбой
   room.players.forEach((p) => {
@@ -162,8 +173,10 @@ function confirmDiceRoll(roomCode, socketId) {
   if (withCards.length === 1) {
     room.winnerIndex = room.players.findIndex(p => p.hand.length > 0);
     room.state = 'finished';
+    room.finalScores = computeFinalScores(room);
   } else if (withCards.length === 0) {
     room.state = 'finished';
+    room.finalScores = computeFinalScores(room);
   }
 
   return { ok: true };
@@ -187,17 +200,18 @@ function playCards(roomCode, socketId, cardIds, claimedRank) {
   room.pile.push({ cardIds, claimedRank, playerIndex });
   room.lastClaim = { rank: claimedRank, count: cardIds.length };
 
+  // Если игрок избавился от всех карт — победа не сразу: следующий должен сказать Верю/Не верю
   if (player.hand.length === 0) {
-    room.winnerIndex = playerIndex;
-    room.state = 'finished';
-  } else {
-    room.currentPlayerIndex = (playerIndex + 1) % room.players.length;
+    room.pendingWinnerIndex = playerIndex;
   }
+  room.currentPlayerIndex = (playerIndex + 1) % room.players.length;
+
   return {
     ok: true,
     nextPlayerIndex: room.currentPlayerIndex,
-    gameOver: room.state === 'finished',
-    winnerIndex: room.winnerIndex,
+    gameOver: false,
+    winnerIndex: -1,
+    pendingWinnerIndex: room.pendingWinnerIndex,
   };
 }
 
@@ -221,22 +235,38 @@ function challenge(roomCode, socketId) {
   // 4 карты одного достоинства сразу уходят в отбой
   moveFourOfAKindToDiscard(loser.hand, room.discard);
 
-  // Если блеф раскрыт, ход переходит к тому, кто раскрыл
-  // Если не блеф, ход переходит к следующему игроку
-  room.currentPlayerIndex = wasLying ? challengerIndex : (challengerIndex + 1) % room.players.length;
+  // Если блеф раскрыт — ход тому, кто раскрыл; тот, кто положил последние карты, забирает их обратно (победа отменяется)
+  if (wasLying) {
+    room.currentPlayerIndex = challengerIndex;
+    if (room.pendingWinnerIndex === lastPlay.playerIndex) {
+      room.pendingWinnerIndex = undefined;
+    }
+  } else {
+    // Не блеф: карты забирает вызвавший «Не верю»; избавившийся от карт выигрывает
+    room.currentPlayerIndex = (challengerIndex + 1) % room.players.length;
+    if (room.pendingWinnerIndex !== undefined) {
+      room.winnerIndex = room.pendingWinnerIndex;
+      room.state = 'finished';
+      room.finalScores = computeFinalScores(room);
+      room.pendingWinnerIndex = undefined;
+    }
+  }
 
   const withCards = room.players.filter(p => p.hand.length > 0);
-  if (withCards.length === 1) {
+  if (withCards.length === 1 && room.state !== 'finished') {
     room.state = 'finished';
     room.winnerIndex = room.players.findIndex(p => p.hand.length > 0);
-  } else if (withCards.length === 0) {
+    room.finalScores = computeFinalScores(room);
+  } else if (withCards.length === 0 && room.state !== 'finished') {
     room.state = 'finished';
-  } else if (loser.hand.length >= 52) {
+    room.finalScores = computeFinalScores(room);
+  } else if (loser.hand.length >= 52 && room.state !== 'finished') {
     room.state = 'finished';
     room.winnerIndex = room.players.findIndex((_, i) => i !== loserIndex && room.players[i].hand.length > 0);
     if (room.players.filter(p => p.hand.length > 0).length === 1) {
       room.winnerIndex = room.players.findIndex(p => p.hand.length > 0);
     }
+    room.finalScores = computeFinalScores(room);
   }
 
   return {
@@ -249,6 +279,7 @@ function challenge(roomCode, socketId) {
     nextPlayerIndex: room.currentPlayerIndex,
     gameOver: room.state === 'finished',
     winnerIndex: room.winnerIndex,
+    finalScores: room.finalScores,
   };
 }
 
@@ -259,19 +290,61 @@ function trust(roomCode, socketId) {
   if (playerIndex === -1) return { ok: false, error: 'not_in_room' };
   if (room.currentPlayerIndex !== playerIndex) return { ok: false, error: 'not_your_turn' };
 
- // Если "Верю" и там действительно те карты, карты уходят в отбой и ход переходит тому, кто сказал «Верю»
   const lastPlay = room.pile[room.pile.length - 1];
-  const wasRight = lastPlay && cardsMatchClaim(lastPlay.cardIds, lastPlay.claimedRank);
+  if (!lastPlay) return { ok: false, error: 'nothing_to_trust' };
+
+  // Проверяем последнюю положенную группу карт
+  const wasRight = cardsMatchClaim(lastPlay.cardIds, lastPlay.claimedRank);
+  const allCards = room.pile.flatMap(p => p.cardIds);
+  const cardCount = allCards.length;
+
   if (wasRight) {
-    const allCards = room.pile.flatMap(p => p.cardIds);
+    // Правда: карты уходят в отбой, ход переходит следующему по часовой стрелке
     room.discard.push(...allCards);
     room.pile = [];
     room.lastClaim = null;
-    room.currentPlayerIndex = playerIndex;
-  } else {
     room.currentPlayerIndex = (playerIndex + 1) % room.players.length;
+    // Если кто-то только что избавился от последних карт — он победил
+    if (room.pendingWinnerIndex !== undefined) {
+      room.winnerIndex = room.pendingWinnerIndex;
+      room.state = 'finished';
+      room.finalScores = computeFinalScores(room);
+      room.pendingWinnerIndex = undefined;
+      return { ok: true, nextPlayerIndex: room.currentPlayerIndex, trustResult: 'discard', gameOver: true, winnerIndex: room.winnerIndex, finalScores: room.finalScores };
+    }
+    return { ok: true, nextPlayerIndex: room.currentPlayerIndex, trustResult: 'discard' };
   }
-  return { ok: true, nextPlayerIndex: room.currentPlayerIndex };
+
+  // Не правда: карты забирает тот, кто нажал «Верю», избавившийся от карт выигрывает
+  const liarIndex = lastPlay.playerIndex;
+  const trusterIndex = playerIndex; // тот, кто сказал «Верю», забирает карты
+  const loser = room.players[trusterIndex];
+  loser.hand.push(...allCards);
+  room.pile = [];
+  room.lastClaim = null;
+  room.currentPlayerIndex = (playerIndex + 1) % room.players.length;
+
+  moveFourOfAKindToDiscard(loser.hand, room.discard);
+
+  if (room.pendingWinnerIndex !== undefined) {
+    room.winnerIndex = room.pendingWinnerIndex;
+    room.state = 'finished';
+    room.finalScores = computeFinalScores(room);
+    room.pendingWinnerIndex = undefined;
+  }
+
+  return {
+    ok: true,
+    wasLying: true,
+    revealedCards: lastPlay.cardIds,
+    claimedRank: lastPlay.claimedRank,
+    loserIndex: trusterIndex,
+    cardCount,
+    nextPlayerIndex: room.currentPlayerIndex,
+    gameOver: room.state === 'finished',
+    winnerIndex: room.winnerIndex,
+    finalScores: room.finalScores,
+  };
 }
 
 export {

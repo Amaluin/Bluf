@@ -204,8 +204,9 @@ io.on('connection', (socket) => {
   socket.on('trust', (roomCode, cb) => {
     const result = trust(roomCode, socket.id);
     if (!result.ok) return cb?.(result);
+    if (result.wasLying) io.to(roomCode).emit('challenge_result', result);
     broadcastGameState(roomCode);
-    cb?.({ ok: true });
+    cb?.({ ok: true, ...result });
   });
 
   socket.on('chat_message', (data, cb) => {
@@ -317,6 +318,8 @@ io.on('connection', (socket) => {
 
     if (playerRoom && playerData) {
       console.log(`Player ${playerData.name} disconnected from room ${playerRoom}, waiting for reconnection...`);
+      // Сразу оповестить остальных в комнате
+      io.to(playerRoom).emit('player_disconnected', { playerName: playerData.name });
 
       // Устанавливаем таймер на удаление игрока (30 секунд)
       const timerId = setTimeout(() => {
@@ -329,6 +332,7 @@ io.on('connection', (socket) => {
             const socketStillExists = io.sockets.sockets.get(socket.id);
             if (!socketStillExists) {
               console.log(`Removing player ${playerData.name} from room ${playerRoom} after timeout`);
+              io.to(playerRoom).emit('player_left', { playerName: playerData.name });
               const updated = removePlayer(playerRoom, socket.id);
               if (updated) {
                 io.to(playerRoom).emit('room_updated', getRoomState(playerRoom));
@@ -373,6 +377,7 @@ function getGameStateForRoom(room) {
     pileCount: room.pile.reduce((s, p) => s + p.cardIds.length, 0),
     discardCount: room.discard?.length || 0,
     winnerIndex: room.winnerIndex,
+    finalScores: room.state === 'finished' ? (room.finalScores || []) : undefined,
     players: room.players.map((p, i) => ({
       index: i,
       id: p.id,

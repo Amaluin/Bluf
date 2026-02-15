@@ -106,6 +106,7 @@
                 </div>
               </div>
             </div>
+            <p id="my-hand-count" class="my-hand-count"></p>
             <div id="my-hand" class="hand"></div>
             <div class="my-actions">
               <div id="selected-indicator" class="selected-cards-indicator hidden">
@@ -124,6 +125,22 @@
           </div>
         </div>
         <div id="challenge-toast" class="toast hidden"></div>
+        <div id="game-final-overlay" class="game-final-overlay hidden">
+          <div class="game-final-card">
+            <h2 class="game-final-title">Игра окончена</h2>
+            <p id="game-final-winner" class="game-final-winner"></p>
+            <table class="game-final-table" aria-label="Финальная таблица очков">
+              <thead>
+                <tr>
+                  <th>Игрок</th>
+                  <th>Очки</th>
+                </tr>
+              </thead>
+              <tbody id="game-final-tbody"></tbody>
+            </table>
+            <p class="game-final-note">Карты: 2–10 по номиналу, В — 11, Д — 12, К — 13, Т — 14.</p>
+          </div>
+        </div>
         <div class="game-footer">
           <button type="button" id="btn-leave-game" class="btn btn-ghost btn-sm">Выйти из игры</button>
         </div>

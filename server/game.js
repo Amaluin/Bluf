@@ -71,6 +71,19 @@ function getRankFromId(id) {
   return r || id;
 }
 
+/** Очки по достоинству: 2–10 = номинал, В = 11, Д = 12, К = 13, Т = 14 */
+const RANK_VALUES = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+
+function getRankValue(rank) {
+  return RANK_VALUES[rank] != null ? RANK_VALUES[rank] : 0;
+}
+
+/** Сумма очков карт в руке (по достоинству). */
+function handPoints(cardIds) {
+  if (!Array.isArray(cardIds)) return 0;
+  return cardIds.reduce((sum, id) => sum + getRankValue(getRankFromId(id)), 0);
+}
+
 export {
   RANKS,
   SUITS,
@@ -79,4 +92,6 @@ export {
   dealCards,
   cardsMatchClaim,
   getRankFromId,
+  getRankValue,
+  handPoints,
 };
