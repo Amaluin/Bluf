@@ -1,37 +1,7 @@
 /**
  * Клиент игры «Верю / Не верю» — Socket.IO, экраны, карты, действия.
+ * Поддержка вертикальной и горизонтальной ориентации.
  */
-
-// Обработка ориентации экрана для мобильных устройств
-function handleOrientation() {
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const isPortrait = window.matchMedia("(orientation: portrait)").matches;
-  const warning = document.getElementById('orientation-warning');
-  const app = document.getElementById('app');
-
-  if (isMobile && isPortrait && window.innerWidth < 768) {
-    if (warning) warning.style.display = 'flex';
-    if (app) app.style.display = 'none';
-  } else {
-    if (warning) warning.style.display = 'none';
-    if (app) app.style.display = 'flex';
-  }
-}
-
-// Проверяем ориентацию при загрузке и изменении
-if (typeof window !== 'undefined') {
-  window.addEventListener('load', handleOrientation);
-  window.addEventListener('resize', handleOrientation);
-  window.addEventListener('orientationchange', handleOrientation);
-
-  // Запрос блокировки ориентации (если поддерживается)
-  if (screen.orientation && screen.orientation.lock) {
-    screen.orientation.lock('landscape').catch(() => {
-      // Блокировка не поддерживается или отклонена
-      console.log('Orientation lock not supported');
-    });
-  }
-}
 
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const SUITS = { '♠': 'spades', '♥': 'hearts', '♦': 'diamonds', '♣': 'clubs' };

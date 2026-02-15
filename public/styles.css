@@ -111,24 +111,145 @@ body {
 }
 
 /* РџРѕРєР°Р·С‹РІР°РµРј РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ С‚РѕР»СЊРєРѕ РЅР° РјРѕР±РёР»СЊРЅС‹С… СѓСЃС‚СЂРѕР№СЃС‚РІР°С… РІ РїРѕСЂС‚СЂРµС‚РЅРѕР№ РѕСЂРёРµРЅС‚Р°С†РёРё */
-@media (max-width: 768px) and (orientation: portrait) {
-  .orientation-warning {
-    display: flex;
-  }
-
-  #app {
-    display: none;
-  }
-}
+/* Портрет: приложение показываем всегда */
 
 /* Р’ Р»Р°РЅРґС€Р°С„С‚РЅРѕР№ РѕСЂРёРµРЅС‚Р°С†РёРё СЃРєСЂС‹РІР°РµРј РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ */
-@media (orientation: landscape) {
-  .orientation-warning {
-    display: none !important;
-  }
+.orientation-warning {
+  display: none !important;
+}
 
-  #app {
-    display: flex !important;
+/* Вертикальная ориентация: компактная вёрстка, всё умещается на экран */
+@media (orientation: portrait) {
+  .header {
+    padding: 0.3rem 0.5rem;
+  }
+  .title {
+    font-size: 1rem;
+  }
+  .subtitle {
+    font-size: 0.6rem;
+    margin-top: 0.1rem;
+  }
+  .main {
+    padding: 0.35rem;
+    min-height: 0;
+  }
+  .game-layout {
+    gap: 0.25rem;
+    min-height: 0;
+    max-height: 100dvh;
+    overflow: auto;
+  }
+  .game-info {
+    min-height: 0;
+    padding: 0.1rem;
+  }
+  .status-text {
+    font-size: 0.8rem;
+  }
+  .claim-block {
+    margin: 0.25rem 0 0;
+    padding: 0.35rem 0.5rem;
+  }
+  .claim-label {
+    font-size: 0.9rem;
+    margin-bottom: 0.15rem;
+  }
+  .claim-count {
+    font-size: 0.8rem;
+    margin-bottom: 0.3rem;
+  }
+  .claim-chip {
+    min-width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.9rem;
+  }
+  .table-center {
+    min-height: 52px;
+    padding: 0.3rem;
+    flex: 0 0 auto;
+  }
+  .table-center::before {
+    inset: 4px;
+  }
+  .pile-area .pile-card {
+    width: 32px;
+    height: 44px;
+    min-width: 32px;
+    min-height: 44px;
+    margin-left: -24px;
+  }
+  .pile-count,
+  .discard-count {
+    font-size: 0.7rem;
+    margin-top: 0.2rem;
+  }
+  .opponents {
+    gap: 0.3rem;
+    flex: 0 0 auto;
+  }
+  .opponent {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+  }
+  .my-area {
+    padding: 0.35rem 0.35rem 0;
+    padding-bottom: max(0.35rem, var(--safe-bottom));
+    flex: 0 0 auto;
+  }
+  .hand {
+    min-height: 48px;
+    margin-bottom: 0.35rem;
+    padding: 0 2px;
+  }
+  .hand .card-in-hand {
+    width: 30px;
+    height: 42px;
+    min-width: 30px;
+    min-height: 42px;
+    margin-left: -22px;
+    padding: 1px 0 0 2px;
+  }
+  .hand .card-in-hand .rank {
+    font-size: 0.6rem;
+  }
+  .hand .card-in-hand .suit {
+    font-size: 0.5rem;
+  }
+  .hand .card-in-hand.selected {
+    transform: translateY(-12px) !important;
+  }
+  .my-actions {
+    gap: 0.25rem;
+  }
+  .action-buttons {
+    gap: 0.3rem;
+  }
+  .action-buttons .btn {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  .rank-select {
+    padding: 0.25rem 0;
+  }
+  .rank-label {
+    font-size: 0.75rem;
+    margin-bottom: 0.2rem;
+  }
+  .rank-btn {
+    padding: 0.3rem 0.45rem;
+    font-size: 0.8rem;
+  }
+  .selected-cards-indicator {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  .game-footer {
+    padding: 0.25rem 0;
+  }
+  .game-footer .btn {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.5rem;
   }
 }
 
