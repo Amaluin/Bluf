@@ -259,6 +259,11 @@ function connect() {
       console.log('[chat] receive ignored: no data or playerName');
       return;
     }
+    var isOurEcho = data.playerName === getMyPlayerName() && data.text === lastSentChatText && (Date.now() - lastSentChatTime) < 5000;
+    if (isOurEcho) {
+      lastSentChatText = '';
+      return;
+    }
     ensureChatColors([{ name: data.playerName }]);
     appendChatMessage(data.playerName, data.text);
   });
@@ -717,6 +722,12 @@ function updateChatVisibility() {
   }
 }
 
+function getMyPlayerName() {
+  if (gameState && gameState.players && gameState.players[myIndex]) return gameState.players[myIndex].name;
+  if (lastLobbyState && lastLobbyState.players && lastLobbyState.players[myIndex]) return lastLobbyState.players[myIndex].name;
+  return 'Вы';
+}
+
 function appendChatMessage(playerName, text) {
   var list = document.getElementById('chat-messages');
   if (!list) return;
@@ -727,6 +738,9 @@ function appendChatMessage(playerName, text) {
   list.appendChild(msg);
   list.scrollTop = list.scrollHeight;
 }
+
+var lastSentChatText = '';
+var lastSentChatTime = 0;
 
 function sendChatMessage() {
   var input = document.getElementById('chat-input');
@@ -739,12 +753,23 @@ function sendChatMessage() {
     console.log('[chat] send skipped: empty text');
     return;
   }
-  console.log('[chat] sending:', { roomCode: roomCode, textLen: text.length, connected: socket.connected });
+  input.value = '';
+  var myName = getMyPlayerName();
+  ensureChatColors([{ name: myName }]);
+  appendChatMessage(myName, text);
+  lastSentChatText = text;
+  lastSentChatTime = Date.now();
+
+  console.log('[chat] sending:', { socketId: socket.id, roomCode: roomCode, textLen: text.length, connected: socket.connected });
   var sendTimeout = setTimeout(function () {
     sendTimeout = null;
-    console.warn('[chat] send timeout — нет ответа от сервера');
-    showChatError('Сообщение не доставлено. Проверьте связь.');
-  }, 12000);
+    console.warn('[chat] send timeout — нет ответа от сервера.');
+    showChatError('Сообщение может не дойти до других. Переподключаемся…');
+    if (roomCode && myPlayerId && socket) {
+      socket.disconnect();
+      socket.connect();
+    }
+  }, 6000);
   socket.emit('chat_message', { roomCode: roomCode, text: text }, function (res) {
     if (sendTimeout) {
       clearTimeout(sendTimeout);
@@ -758,7 +783,6 @@ function sendChatMessage() {
       return;
     }
     console.log('[chat] send ok');
-    input.value = '';
   });
 }
 
@@ -772,9 +796,29 @@ function showChatError(msg) {
   setTimeout(function () { el.remove(); }, 4000);
 }
 
+function isMediaAllowedByBrowser() {
+  // Камера/микрофон доступны только в безопасном контексте: https или localhost
+  return typeof window !== 'undefined' && window.isSecureContext === true;
+}
+
+function showLobbyToast(msg) {
+  var lobby = document.getElementById('screen-lobby');
+  if (!lobby) return;
+  var el = document.createElement('div');
+  el.className = 'copy-notification';
+  el.style.marginTop = '8px';
+  el.textContent = msg;
+  lobby.querySelector('.lobby-card')?.appendChild(el);
+  setTimeout(function () { el.remove(); }, 8000);
+}
+
 function requestLobbyMedia() {
   if (lobbyMediaRequested) return Promise.resolve();
   lobbyMediaRequested = true;
+  if (!isMediaAllowedByBrowser()) {
+    showLobbyToast('Камера и микрофон работают только по HTTPS или с localhost. На сервере включите HTTPS или заходите с этого компьютера по http://localhost:3000');
+    return Promise.resolve();
+  }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     return Promise.resolve();
   }

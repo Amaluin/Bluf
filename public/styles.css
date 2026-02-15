@@ -201,14 +201,16 @@ body {
     min-height: 58px;
     margin-bottom: 0.35rem;
     padding: 0 2px;
-    max-width: 160px;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    gap: 10px;
   }
   .hand .card-in-hand {
     width: 38px;
     height: 52px;
     min-width: 38px;
     min-height: 52px;
-    margin-left: -18px;
+    margin: 0;
     padding: 1px 0 0 2px;
   }
   .hand .card-in-hand .rank {
@@ -1340,8 +1342,8 @@ body {
 .hand {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
   align-items: flex-end;
   min-height: 68px;
   margin-bottom: 0.5rem;
@@ -1349,10 +1351,12 @@ body {
   margin-right: auto;
   padding: 0 4px;
   touch-action: manipulation;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: visible;
   position: relative;
-  gap: 0;
-  row-gap: 0.5rem;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .hand .card-in-hand {
@@ -1380,11 +1384,11 @@ body {
   position: relative;
   z-index: 0;
   padding: 2px 0 0 3px;
-  margin-left: -20px;
+  margin: 0;
 }
 
 .hand .card-in-hand:first-child {
-  margin-left: 0;
+  margin: 0;
 }
 
 /* Порядок по слоям: карты справа поверх выбранных, чтобы выбранные не загораживали руку */
@@ -1404,46 +1408,47 @@ body {
 .hand .card-in-hand:nth-child(14) { z-index: 14; }
 .hand .card-in-hand:nth-child(15) { z-index: 15; }
 
-/* Ширина руки: карты с меньшим перекрытием (-20px), больше видно */
+/* Рука: одна строка, зазор 12px, прокрутка — карты не перекрываются */
 .hand {
-  max-width: 300px;
+  max-width: 100%;
   padding-right: 8px;
 }
 
-/* Узкие экраны (до 360px): компактнее карты */
+/* Узкие экраны (до 360px): компактнее карты, одна строка */
 @media (max-width: 360px) {
+  .hand { gap: 10px; min-height: 58px; padding: 0 2px; flex-wrap: nowrap; }
   .hand .card-in-hand {
     width: 38px;
     height: 52px;
     min-width: 38px;
     min-height: 52px;
-    margin-left: -18px;
+    margin: 0;
     padding: 1px 0 0 2px;
+    flex-shrink: 0;
   }
   .hand .card-in-hand .rank { font-size: 0.7rem; }
   .hand .card-in-hand .suit { font-size: 0.6rem; }
-  .hand { min-height: 58px; padding: 0 2px; max-width: 206px; }
 }
-/* 14 карт: 38 + 13*12 = 194 */
+/* 14 карт: 38 + 13*34 ≈ 480px — прокрутка при необходимости */
 
-/* До 400px: меньше перекрытие — карты лучше видно */
+/* До 400px: одна строка, зазор 12px */
 @media (max-width: 400px) {
-  .hand .card-in-hand { margin-left: -20px; }
-  .hand { max-width: 240px; }
+  .hand { gap: 12px; flex-wrap: nowrap; }
+  .hand .card-in-hand { margin: 0; flex-shrink: 0; }
 }
 /* 14 карт: 44 + 13*16 = 252 */
 
-/* Смартфоны: до 14 карт в ряд, перенос на следующую строку */
+/* Смартфоны: одна строка, прокрутка влево-вправо */
 @media (max-width: 480px) {
   .hand {
-    flex-wrap: wrap;
-    max-width: 450px;
-    justify-content: center;
+    flex-wrap: nowrap;
+    max-width: 100%;
+    justify-content: flex-start;
     padding-left: 4px;
     padding-right: 12px;
-    row-gap: 0.6rem;
     padding-bottom: 4px;
   }
+  .hand .card-in-hand { flex-shrink: 0; }
   .hand .card-in-hand.selected { scroll-margin-left: 8px; scroll-margin-right: 8px; }
 }
 
@@ -1486,15 +1491,17 @@ body {
   box-shadow: 0 8px 20px var(--shadow), 0 0 0 2px var(--gold);
 }
 
-/* РЈР»СѓС‡С€РµРЅРЅРѕРµ РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ РґР»СЏ РјРѕР±РёР»СЊРЅС‹С… */
+/* При нажатии карта поднимается и выходит на передний план */
 .hand .card-in-hand:active {
   transform: translateY(-10px) !important;
+  z-index: 100 !important;
 }
 
-/* РЈР±РёСЂР°РµРј hover СЌС„С„РµРєС‚ РЅР° РјРѕР±РёР»СЊРЅС‹С… СѓСЃС‚СЂРѕР№СЃС‚РІР°С… */
+/* При наведении карта сверху, чтобы не пряталась за соседними */
 @media (hover: hover) and (pointer: fine) {
   .hand .card-in-hand:hover {
     transform: translateY(-8px) !important;
+    z-index: 50 !important;
   }
 }
 
@@ -1584,10 +1591,7 @@ body {
 @media (min-width: 380px) {
   .hand {
     min-height: 78px;
-  }
-
-  .hand {
-    max-width: 380px;
+    max-width: 100%;
   }
   .hand .card-in-hand {
     width: 52px;
@@ -1615,7 +1619,7 @@ body {
 @media (min-width: 480px) {
   .hand {
     min-height: 84px;
-    max-width: 440px;
+    max-width: 100%;
   }
 
   .hand .card-in-hand {
@@ -1640,7 +1644,7 @@ body {
 @media (min-width: 640px) {
   .hand {
     min-height: 88px;
-    max-width: 500px;
+    max-width: 100%;
   }
 
   .hand .card-in-hand {

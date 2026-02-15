@@ -1,5 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
+import { createServer as createHttpsServer } from 'https';
+import { readFileSync, existsSync } from 'fs';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -18,7 +20,39 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const httpServer = createServer(app);
+
+// HTTPS: SSL_CERT и SSL_KEY в env или cert.pem/key.pem в папке server/
+function resolveCertPath(p) {
+  if (!p) return null;
+  return path.isAbsolute(p) ? p : path.resolve(__dirname, p);
+}
+const sslCertPath = process.env.SSL_CERT
+  ? resolveCertPath(process.env.SSL_CERT)
+  : path.join(__dirname, 'cert.pem');
+const sslKeyPath = process.env.SSL_KEY
+  ? resolveCertPath(process.env.SSL_KEY)
+  : path.join(__dirname, 'key.pem');
+const certFilesExist = existsSync(sslCertPath) && existsSync(sslKeyPath);
+let useHttps = false;
+let httpServer;
+if (certFilesExist) {
+  try {
+    httpServer = createHttpsServer(
+      {
+        cert: readFileSync(sslCertPath),
+        key: readFileSync(sslKeyPath),
+      },
+      app
+    );
+    useHttps = true;
+  } catch (err) {
+    console.error('HTTPS: не удалось загрузить сертификат:', err.message);
+    httpServer = createServer(app);
+  }
+} else {
+  httpServer = createServer(app);
+}
+
 const io = new Server(httpServer, {
   cors: { origin: '*' },
   pingTimeout: 60000,
@@ -176,19 +210,30 @@ io.on('connection', (socket) => {
 
   socket.on('chat_message', (data, cb) => {
     const ack = typeof cb === 'function' ? cb : null;
+    let ackCalled = false;
+    function sendAck(result) {
+      if (ackCalled || !ack) return;
+      ackCalled = true;
+      try {
+        ack(result);
+        console.log('[chat] ack sent to', socket.id, result.ok ? 'ok' : result.error);
+      } catch (e) {
+        console.error('[chat] ack throw', e);
+      }
+    }
     try {
-      const roomCode = data && data.roomCode;
-      const text = data && data.text;
+      const roomCode = data && typeof data === 'object' ? data.roomCode : data;
+      const text = data && typeof data === 'object' ? data.text : undefined;
       const code = roomCode && String(roomCode).toUpperCase().trim();
-      console.log('[chat] received from', socket.id, { roomCode: code, textLen: (text && String(text).length) || 0 });
+      console.log('[chat] received from', socket.id, { roomCode: code, textLen: (text && String(text).length) || 0, hasAck: !!ack });
       if (!code) {
-        ack?.({ ok: false, error: 'room_not_found' });
+        sendAck({ ok: false, error: 'room_not_found' });
         return;
       }
       const room = getRoom(code);
       if (!room) {
         console.log('[chat] error: room_not_found', code);
-        ack?.({ ok: false, error: 'room_not_found' });
+        sendAck({ ok: false, error: 'room_not_found' });
         return;
       }
       let player = room.players.find(p => p.socketId === socket.id);
@@ -202,21 +247,23 @@ io.on('connection', (socket) => {
       }
       if (!player) {
         console.log('[chat] error: not_in_room', socket.id, code);
-        ack?.({ ok: false, error: 'not_in_room' });
+        sendAck({ ok: false, error: 'not_in_room' });
         return;
       }
       const msg = String(text ?? '').trim();
       if (!msg) {
-        ack?.({ ok: true });
+        sendAck({ ok: true });
         return;
       }
       const payload = { playerName: player.name, playerId: player.id, text: msg };
       console.log('[chat] broadcast to room', code, payload.playerName);
       io.to(code).emit('chat_message', payload);
-      ack?.({ ok: true });
+      sendAck({ ok: true });
     } catch (err) {
       console.error('[chat] handler error', err);
-      ack?.({ ok: false, error: 'server_error' });
+      sendAck({ ok: false, error: 'server_error' });
+    } finally {
+      if (!ackCalled && ack) sendAck({ ok: false, error: 'server_error' });
     }
   });
 
@@ -346,10 +393,25 @@ function getGameStateForRoom(room) {
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
+// Камера/микрофон в браузере работают только по HTTPS (или localhost).
+// Для доступа с сервера по IP/домену нужен HTTPS: reverse proxy (nginx + Let's Encrypt) или см. docs/HTTPS.md
+
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__dirname, 'index.js');
+const protocol = useHttps ? 'https' : 'http';
 if (isMain) {
   httpServer.listen(PORT, HOST, () => {
-    console.log(`Bluf: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${httpServer.address().port}`);
+    const port = httpServer.address().port;
+    const addr = HOST === '0.0.0.0' ? 'все интерфейсы (0.0.0.0)' : HOST;
+    console.log(`Bluf: ${protocol}://${addr}:${port}`);
+    if (HOST === '0.0.0.0') {
+      console.log(`   → по IP сервера: ${protocol}://<IP-сервера>:${port}`);
+      console.log(`   → локально: ${protocol}://localhost:${port}`);
+    }
+    if (useHttps) {
+      console.log('(HTTPS: камера/микрофон будут работать по этому адресу)');
+    } else if (!certFilesExist) {
+      console.log('(HTTPS выключен: положите cert.pem и key.pem в server/ для камеры по IP/домену)');
+    }
   });
 }
 
