@@ -68,6 +68,7 @@ var lobbyMediaRequested = false;
 var localLobbyStream = null;
 var lobbyPeerConnections = {};
 var lobbyRemoteStreams = {};
+var lobbyRemoteMuted = {}; // для каждого сокета: выключен ли у нас звук этого участника
 var lastLobbyState = null;
 
 const $ = (id) => document.getElementById(id);
@@ -843,6 +844,7 @@ function stopLobbyMedia() {
   });
   lobbyPeerConnections = {};
   lobbyRemoteStreams = {};
+  lobbyRemoteMuted = {};
 }
 
 function getOrCreateLobbyPeer(remoteSocketId) {
@@ -861,7 +863,10 @@ function getOrCreateLobbyPeer(remoteSocketId) {
     for (var i = 0; i < list.length; i++) {
       if (list[i].getAttribute('data-socket-id') === remoteSocketId) {
         var video = list[i].querySelector('.lobby-video-el');
-        if (video) video.srcObject = stream;
+        if (video) {
+          video.srcObject = stream;
+          video.muted = !!lobbyRemoteMuted[remoteSocketId];
+        }
         break;
       }
     }
@@ -911,6 +916,18 @@ function ensureLobbyConnections(players) {
   });
 }
 
+function getMyLobbyCamMicState() {
+  var cam = true;
+  var mic = true;
+  if (localLobbyStream) {
+    var vt = localLobbyStream.getVideoTracks()[0];
+    var at = localLobbyStream.getAudioTracks()[0];
+    if (vt) cam = vt.enabled;
+    if (at) mic = at.enabled;
+  }
+  return { cam: cam, mic: mic };
+}
+
 function renderLobbyWithVideos(players) {
   var list = $('lobby-players');
   if (!list) return;
@@ -919,6 +936,7 @@ function renderLobbyWithVideos(players) {
     return;
   }
   var myId = socket ? socket.id : '';
+  var myState = getMyLobbyCamMicState();
   list.innerHTML = players.map(function (p) {
     var sid = p.socketId || '';
     var name = escapeHtml(p.name || '');
@@ -928,16 +946,29 @@ function renderLobbyWithVideos(players) {
     var videoHtml = hasVideo
       ? '<video class="lobby-video-el" autoplay playsinline ' + (isSelf ? 'muted ' : '') + 'style="transform:scaleX(' + (isSelf ? '-1' : '1') + ')"></video>'
       : '<div class="lobby-video-placeholder"></div>';
-    return '<li class="lobby-player" data-socket-id="' + escapeHtml(sid) + '">' +
+    var btnLabel;
+    if (isSelf) {
+      btnLabel = myState.cam || myState.mic ? 'Выкл. камеру и микрофон' : 'Вкл. камеру и микрофон';
+    } else {
+      btnLabel = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
+    }
+    return '<li class="lobby-player" data-socket-id="' + escapeHtml(sid) + '" data-is-self="' + (isSelf ? '1' : '0') + '">' +
       '<div class="lobby-video-wrap">' + videoHtml + '</div>' +
-      '<span class="lobby-player-name">' + name + '</span></li>';
+      '<div class="lobby-player-info">' +
+      '<span class="lobby-player-name">' + name + '</span>' +
+      '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle">' + escapeHtml(btnLabel) + '</button>' +
+      '</div></li>';
   }).join('');
   list.querySelectorAll('.lobby-video-el').forEach(function (video, i) {
     var li = video.closest('.lobby-player');
     var sid = li && li.getAttribute('data-socket-id');
     if (!sid) return;
-    if (sid === myId) video.srcObject = localLobbyStream;
-    else if (lobbyRemoteStreams[sid]) video.srcObject = lobbyRemoteStreams[sid];
+    if (sid === myId) {
+      video.srcObject = localLobbyStream;
+    } else {
+      if (lobbyRemoteStreams[sid]) video.srcObject = lobbyRemoteStreams[sid];
+      video.muted = !!lobbyRemoteMuted[sid];
+    }
   });
 }
 
@@ -1260,6 +1291,35 @@ function init() {
           ensureLobbyConnections(lastLobbyState.players);
         }
       });
+    });
+  }
+
+  var lobbyPlayersList = document.getElementById('lobby-players');
+  if (lobbyPlayersList) {
+    lobbyPlayersList.addEventListener('click', function (e) {
+      var btn = e.target.closest('.lobby-btn-toggle');
+      if (!btn) return;
+      var li = btn.closest('.lobby-player');
+      if (!li) return;
+      var sid = li.getAttribute('data-socket-id');
+      var isSelf = li.getAttribute('data-is-self') === '1';
+      if (isSelf) {
+        if (!localLobbyStream) return;
+        var state = getMyLobbyCamMicState();
+        if (state.cam || state.mic) {
+          localLobbyStream.getVideoTracks().forEach(function (t) { t.enabled = false; });
+          localLobbyStream.getAudioTracks().forEach(function (t) { t.enabled = false; });
+        } else {
+          localLobbyStream.getVideoTracks().forEach(function (t) { t.enabled = true; });
+          localLobbyStream.getAudioTracks().forEach(function (t) { t.enabled = true; });
+        }
+        if (lastLobbyState && lastLobbyState.players) renderLobbyWithVideos(lastLobbyState.players);
+      } else {
+        lobbyRemoteMuted[sid] = !lobbyRemoteMuted[sid];
+        var video = li.querySelector('.lobby-video-el');
+        if (video) video.muted = !!lobbyRemoteMuted[sid];
+        btn.textContent = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
+      }
     });
   }
 
