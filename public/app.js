@@ -33,6 +33,15 @@ let gameState = null;
 let selectedCards = new Set();
 let isHost = false;
 
+/* Цвета имён в чате: палитра, у каждого игрока свой цвет */
+var CHAT_COLORS = [
+  '#e8b4bc', '#7ec8e3', '#9ddf9b', '#f7dc6f', '#bb8fce',
+  '#85c1e9', '#f8b88b', '#a3e4d7', '#f5b7b1', '#aed6f1',
+  '#d7bde2', '#f9e79f', '#82e0aa', '#fadbd8', '#d5f5e3',
+];
+var chatNameToColor = {};
+var chatColorIndex = 0;
+
 const $ = (id) => document.getElementById(id);
 const showScreen = (id) => {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -71,15 +80,76 @@ function renderCard(id, options = {}) {
 
 function connect() {
   var serverUrl = (typeof window !== 'undefined' && window.BLUF_SERVER_URL) || '';
-  socket = io(serverUrl, { path: '/socket.io', transports: ['websocket', 'polling'] });
+  socket = io(serverUrl, {
+    path: '/socket.io',
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: Infinity
+  });
 
   socket.on('connect', () => {
     console.log('Connected');
+
+    // Если мы были в комнате, пытаемся переподключиться
+    if (roomCode) {
+      console.log('Reconnecting to room:', roomCode);
+      socket.emit('rejoin_room', roomCode, (res) => {
+        if (res?.ok) {
+          console.log('Successfully rejoined room');
+          myIndex = res.playerIndex;
+
+          // Запрашиваем текущее состояние игры
+          if (res.gameState) {
+            gameState = res.gameState;
+            myIndex = res.gameState.myIndex;
+            myHand = sortHand(res.gameState.myHand || []);
+            selectedCards.clear();
+
+            // Определяем текущий экран на основе состояния
+            if (res.gameState.state === 'playing') {
+              showScreen('screen-game');
+              updateGameUI(res.gameState);
+            } else if (res.gameState.state === 'dice_roll') {
+              showScreen('screen-dice');
+            } else if (res.gameState.state === 'lobby') {
+              showScreen('screen-lobby');
+            }
+          }
+        } else {
+          console.log('Failed to rejoin room, returning to welcome screen');
+          roomCode = null;
+          showScreen('screen-welcome');
+        }
+      });
+    }
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log('Disconnected:', reason);
+    // Показываем индикатор отключения
+    showConnectionStatus(false);
+  });
+
+  socket.on('reconnect', (attemptNumber) => {
+    console.log('Reconnected after', attemptNumber, 'attempts');
+    showConnectionStatus(true);
+  });
+
+  socket.on('reconnect_attempt', (attemptNumber) => {
+    console.log('Reconnection attempt:', attemptNumber);
+  });
+
+  socket.on('reconnect_error', (error) => {
+    console.log('Reconnection error:', error);
   });
 
   socket.on('room_updated', (state) => {
     if (!state) return;
     roomCode = state.code;
+    updateChatVisibility();
+    ensureChatColors(state.players || []);
     $('lobby-code').textContent = state.code;
     const list = $('lobby-players');
     list.innerHTML = state.players.map(p => `<li>${escapeHtml(p.name)}</li>`).join('');
@@ -116,7 +186,14 @@ function connect() {
 
   socket.on('room_closed', () => {
     roomCode = null;
+    updateChatVisibility();
     showScreen('screen-welcome');
+  });
+
+  socket.on('chat_message', (data) => {
+    if (!data || !data.playerName) return;
+    ensureChatColors([{ name: data.playerName }]);
+    appendChatMessage(data.playerName, data.text);
   });
 
   socket.on('game_started', () => {
@@ -128,6 +205,7 @@ function connect() {
     myIndex = state.myIndex;
     myHand = sortHand(state.myHand || []);
     selectedCards.clear();
+    if (state.players && state.players.length) ensureChatColors(state.players);
     updateGameUI(state);
   });
 
@@ -135,14 +213,29 @@ function connect() {
     const msg = result.wasLying
       ? `Блеф! Заявлено: ${result.claimedRank}. Карты уходят игроку, который положил.`
       : `Правда. Карты забирает вызвавший «Не верю».`;
+
+    // Показываем сообщение о результате
     const toast = $('challenge-toast');
     toast.textContent = msg;
     toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 4000);
 
-    // Анимация карт, летящих к игроку
-    if (result.loserIndex !== undefined) {
-      animateCardsToPlayer(result.loserIndex, result.cardCount || 1);
+    // Если есть карты для показа, отображаем их на 3 секунды
+    if (result.revealedCards && result.revealedCards.length > 0) {
+      showRevealedCards(result.revealedCards, () => {
+        // После показа карт скрываем тост и анимируем перемещение
+        setTimeout(() => {
+          toast.classList.add('hidden');
+          if (result.loserIndex !== undefined) {
+            animateCardsToPlayer(result.loserIndex, result.cardCount || 1);
+          }
+        }, 500);
+      });
+    } else {
+      // Если карт нет, просто скрываем тост через 4 секунды
+      setTimeout(() => toast.classList.add('hidden'), 4000);
+      if (result.loserIndex !== undefined) {
+        animateCardsToPlayer(result.loserIndex, result.cardCount || 1);
+      }
     }
   });
 }
@@ -431,10 +524,86 @@ function redrawHand() {
   });
 }
 
+function showConnectionStatus(connected) {
+  let statusEl = $('connection-status');
+
+  if (!statusEl) {
+    statusEl = document.createElement('div');
+    statusEl.id = 'connection-status';
+    statusEl.className = 'connection-status';
+    document.body.appendChild(statusEl);
+  }
+
+  if (connected) {
+    statusEl.textContent = 'Подключено';
+    statusEl.classList.add('connected');
+    statusEl.classList.remove('disconnected');
+
+    // Скрываем через 2 секунды
+    setTimeout(() => {
+      statusEl.classList.add('hidden');
+    }, 2000);
+  } else {
+    statusEl.textContent = 'Переподключение...';
+    statusEl.classList.add('disconnected');
+    statusEl.classList.remove('connected', 'hidden');
+  }
+}
+
 function escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s;
   return div.innerHTML;
+}
+
+function ensureChatColors(players) {
+  if (!players || !players.length) return;
+  players.forEach(function (p) {
+    var name = p && p.name ? String(p.name) : '';
+    if (name && !chatNameToColor[name]) {
+      chatNameToColor[name] = CHAT_COLORS[chatColorIndex % CHAT_COLORS.length];
+      chatColorIndex += 1;
+    }
+  });
+}
+
+function getChatColorForName(playerName) {
+  var name = playerName ? String(playerName) : '';
+  return chatNameToColor[name] || CHAT_COLORS[0];
+}
+
+function updateChatVisibility() {
+  var w = document.getElementById('chat-widget');
+  if (!w) return;
+  if (roomCode) {
+    w.classList.remove('hidden');
+  } else {
+    w.classList.add('hidden');
+    w.classList.remove('is-open');
+    var list = document.getElementById('chat-messages');
+    if (list) list.innerHTML = '';
+  }
+}
+
+function appendChatMessage(playerName, text) {
+  var list = document.getElementById('chat-messages');
+  if (!list) return;
+  var color = getChatColorForName(playerName);
+  var msg = document.createElement('div');
+  msg.className = 'chat-message';
+  msg.innerHTML = '<span class="chat-name" style="color:' + escapeHtml(color) + '">' + escapeHtml(playerName) + ':</span> ' + escapeHtml(text);
+  list.appendChild(msg);
+  list.scrollTop = list.scrollHeight;
+}
+
+function sendChatMessage() {
+  var input = document.getElementById('chat-input');
+  if (!input || !roomCode || !socket) return;
+  var text = (input.value || '').trim();
+  if (!text) return;
+  socket.emit('chat_message', { roomCode: roomCode, text: text }, function () {
+    input.value = '';
+  });
 }
 
 function animateCardsToPlayer(playerIndex, cardCount = 1) {
@@ -484,6 +653,70 @@ function animateCardsToPlayer(playerIndex, cardCount = 1) {
   }
 }
 
+function showRevealedCards(cards, onComplete) {
+  // Создаем оверлей для показа карт
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    animation: fadeIn 0.3s ease;
+  `;
+
+  const title = document.createElement('div');
+  title.textContent = 'Раскрытые карты:';
+  title.style.cssText = `
+    color: var(--gold);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  `;
+  overlay.appendChild(title);
+
+  const cardsContainer = document.createElement('div');
+  cardsContainer.style.cssText = `
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 90%;
+  `;
+
+  cards.forEach((cardId, index) => {
+    const card = renderCard(cardId, { inHand: false });
+    card.style.cssText = `
+      width: 60px;
+      height: 84px;
+      min-width: 60px;
+      min-height: 84px;
+      animation: cardReveal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+      animation-delay: ${index * 0.1}s;
+    `;
+    cardsContainer.appendChild(card);
+  });
+
+  overlay.appendChild(cardsContainer);
+  document.body.appendChild(overlay);
+
+  // Автоматически закрываем через 3 секунды
+  setTimeout(() => {
+    overlay.style.animation = 'fadeOut 0.3s ease';
+    setTimeout(() => {
+      overlay.remove();
+      if (onComplete) onComplete();
+    }, 300);
+  }, 3000);
+}
+
 function copyRoomCode() {
   const codeEl = $('lobby-code');
   const notification = $('copy-notification');
@@ -529,6 +762,76 @@ function showCopyNotification(notification) {
 }
 
 function init() {
+  // Обработка видимости страницы
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && roomCode && socket) {
+      console.log('Page became visible, checking connection...');
+
+      // Если соединение разорвано, пытаемся переподключиться
+      if (!socket.connected) {
+        console.log('Socket disconnected, reconnecting...');
+        socket.connect();
+      } else {
+        // Если соединение активно, запрашиваем обновление состояния
+        console.log('Socket connected, requesting state update...');
+        socket.emit('rejoin_room', roomCode, (res) => {
+          if (res?.ok && res.gameState) {
+            gameState = res.gameState;
+            myIndex = res.gameState.myIndex;
+            myHand = sortHand(res.gameState.myHand || []);
+            selectedCards.clear();
+
+            if (res.gameState.state === 'playing') {
+              showScreen('screen-game');
+              updateGameUI(res.gameState);
+            }
+          }
+        });
+      }
+    }
+  });
+
+  // Обработка событий для мобильных устройств (iOS/Android)
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted && roomCode && socket) {
+      console.log('Page restored from cache, checking connection...');
+
+      if (!socket.connected) {
+        socket.connect();
+      } else {
+        socket.emit('rejoin_room', roomCode, (res) => {
+          if (res?.ok && res.gameState) {
+            gameState = res.gameState;
+            myIndex = res.gameState.myIndex;
+            myHand = sortHand(res.gameState.myHand || []);
+            selectedCards.clear();
+
+            if (res.gameState.state === 'playing') {
+              showScreen('screen-game');
+              updateGameUI(res.gameState);
+            }
+          }
+        });
+      }
+    }
+  });
+
+  // Обработка возврата в приложение (для PWA)
+  window.addEventListener('focus', () => {
+    if (roomCode && socket && socket.connected) {
+      console.log('Window focused, checking state...');
+      socket.emit('rejoin_room', roomCode, (res) => {
+        if (res?.ok && res.gameState && res.gameState.state === 'playing') {
+          gameState = res.gameState;
+          myIndex = res.gameState.myIndex;
+          myHand = sortHand(res.gameState.myHand || []);
+          selectedCards.clear();
+          updateGameUI(res.gameState);
+        }
+      });
+    }
+  });
+
   $('btn-create').addEventListener('click', () => {
     const name = ($('input-name').value || 'Игрок').trim();
     socket.emit('create_room', name, (res) => {
@@ -536,6 +839,7 @@ function init() {
         roomCode = res.roomCode;
         myIndex = res.playerIndex;
         isHost = true; // Создатель комнаты всегда хост
+        updateChatVisibility();
         showScreen('screen-lobby');
         socket.emit('set_ready', roomCode);
         $('lobby-code').textContent = roomCode;
@@ -557,6 +861,7 @@ function init() {
         roomCode = res.roomCode;
         myIndex = res.playerIndex;
         isHost = false; // Присоединившийся игрок не хост
+        updateChatVisibility();
         showScreen('screen-lobby');
         socket.emit('set_ready', roomCode);
 
@@ -587,6 +892,7 @@ function init() {
 
   $('btn-leave-lobby').addEventListener('click', () => {
     roomCode = null;
+    updateChatVisibility();
     showScreen('screen-welcome');
   });
 
@@ -607,8 +913,29 @@ function init() {
 
   $('btn-leave-game').addEventListener('click', () => {
     roomCode = null;
+    updateChatVisibility();
     showScreen('screen-welcome');
   });
+
+  var chatToggle = document.getElementById('chat-toggle');
+  var chatWidget = document.getElementById('chat-widget');
+  var chatInput = document.getElementById('chat-input');
+  var chatSend = document.getElementById('chat-send');
+  if (chatToggle && chatWidget) {
+    chatToggle.addEventListener('click', function () {
+      chatWidget.classList.toggle('is-open');
+      if (chatWidget.classList.contains('is-open')) chatInput && chatInput.focus();
+    });
+  }
+  if (chatSend) chatSend.addEventListener('click', sendChatMessage);
+  if (chatInput) {
+    chatInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+  }
 
   connect();
 }

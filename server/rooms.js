@@ -3,7 +3,7 @@
  * Один экземпляр — одна комната (для простоты можно масштабировать через Map по roomId).
  */
 
-import { dealCards, cardsMatchClaim, getRankFromId } from './game.js';
+import { dealCards, cardsMatchClaim } from './game.js';
 
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 
@@ -186,7 +186,7 @@ function challenge(roomCode, socketId) {
   return {
     ok: true,
     wasLying,
-    revealedCards: lastPlay.cardIds.map(id => ({ id, rank: getRankFromId(id) })),
+    revealedCards: lastPlay.cardIds,
     claimedRank: lastPlay.claimedRank,
     loserIndex,
     cardCount,

@@ -37,6 +37,9 @@ function generateRoomCode() {
   return code;
 }
 
+// Хранилище таймеров отключения
+const disconnectTimers = new Map();
+
 io.on('connection', (socket) => {
   socket.on('create_room', (playerName, cb) => {
     let code = generateRoomCode();
@@ -58,6 +61,62 @@ io.on('connection', (socket) => {
     socket.join(code);
     cb?.({ ok: true, roomCode: code, playerId: result.playerId, playerIndex: result.playerIndex });
     io.to(code).emit('room_updated', getRoomState(code));
+  });
+
+  socket.on('rejoin_room', (roomCode, cb) => {
+    const code = (roomCode || '').toUpperCase().trim();
+    const room = getRoom(code);
+    if (!room) return cb?.({ ok: false, error: 'room_not_found' });
+
+    // Находим игрока по старому socketId или создаем нового
+    let playerIndex = room.players.findIndex(p => p.socketId === socket.id);
+
+    // Если игрок не найден, пытаемся найти отключенного игрока
+    if (playerIndex === -1) {
+      // Ищем первого игрока без активного соединения
+      playerIndex = room.players.findIndex(p => !io.sockets.sockets.get(p.socketId));
+
+      if (playerIndex !== -1) {
+        const oldSocketId = room.players[playerIndex].socketId;
+
+        // Отменяем таймер удаления для старого соединения
+        if (disconnectTimers.has(oldSocketId)) {
+          clearTimeout(disconnectTimers.get(oldSocketId));
+          disconnectTimers.delete(oldSocketId);
+          console.log(`Cancelled disconnect timer for ${oldSocketId}`);
+        }
+
+        // Обновляем socketId для переподключившегося игрока
+        room.players[playerIndex].socketId = socket.id;
+        console.log(`Player ${room.players[playerIndex].name} reconnected to room ${code}`);
+      } else {
+        return cb?.({ ok: false, error: 'player_not_found' });
+      }
+    }
+
+    socket.join(code);
+
+    // Отправляем текущее состояние игры
+    let gameState = null;
+    if (room.state === 'playing' || room.state === 'finished') {
+      const { forPlayers } = getGameStateForRoom(room);
+      gameState = forPlayers[playerIndex];
+    }
+
+    cb?.({
+      ok: true,
+      roomCode: code,
+      playerIndex,
+      gameState: gameState || { state: room.state }
+    });
+
+    // Обновляем состояние комнаты для всех
+    io.to(code).emit('room_updated', getRoomState(code));
+
+    // Если игра идет, отправляем обновленное состояние
+    if (room.state === 'playing') {
+      broadcastGameState(code);
+    }
   });
 
   socket.on('set_ready', (roomCode, cb) => {
@@ -114,14 +173,70 @@ io.on('connection', (socket) => {
     cb?.({ ok: true });
   });
 
+  socket.on('chat_message', ({ roomCode, text }, cb) => {
+    const code = roomCode && String(roomCode).toUpperCase().trim();
+    const room = getRoom(code);
+    if (!room) return cb?.({ ok: false, error: 'room_not_found' });
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return cb?.({ ok: false, error: 'not_in_room' });
+    const msg = String(text ?? '').trim();
+    if (!msg) return cb?.({ ok: true });
+    io.to(code).emit('chat_message', {
+      playerName: player.name,
+      playerId: player.id,
+      text: msg,
+    });
+    cb?.({ ok: true });
+  });
+
   socket.on('disconnect', () => {
-    for (const [code, room] of io.sockets.adapter.rooms) {
-      if (code.length === 6 && room.has(socket.id)) {
-        const updated = removePlayer(code, socket.id);
-        if (updated) io.to(code).emit('room_updated', getRoomState(code));
-        else io.to(code).emit('room_closed');
-        break;
+    console.log('Socket disconnected:', socket.id);
+
+    // Находим комнату игрока
+    let playerRoom = null;
+    let playerData = null;
+
+    for (const [code] of io.sockets.adapter.rooms) {
+      if (code.length === 6) {
+        const roomData = getRoom(code);
+        if (roomData) {
+          const player = roomData.players.find(p => p.socketId === socket.id);
+          if (player) {
+            playerRoom = code;
+            playerData = player;
+            break;
+          }
+        }
       }
+    }
+
+    if (playerRoom && playerData) {
+      console.log(`Player ${playerData.name} disconnected from room ${playerRoom}, waiting for reconnection...`);
+
+      // Устанавливаем таймер на удаление игрока (30 секунд)
+      const timerId = setTimeout(() => {
+        // Проверяем, переподключился ли игрок
+        const roomData = getRoom(playerRoom);
+        if (roomData) {
+          const player = roomData.players.find(p => p.socketId === socket.id);
+          if (player) {
+            // Проверяем, активно ли соединение
+            const socketStillExists = io.sockets.sockets.get(socket.id);
+            if (!socketStillExists) {
+              console.log(`Removing player ${playerData.name} from room ${playerRoom} after timeout`);
+              const updated = removePlayer(playerRoom, socket.id);
+              if (updated) {
+                io.to(playerRoom).emit('room_updated', getRoomState(playerRoom));
+              } else {
+                io.to(playerRoom).emit('room_closed');
+              }
+              disconnectTimers.delete(socket.id);
+            }
+          }
+        }
+      }, 30000); // 30 секунд на переподключение
+
+      disconnectTimers.set(socket.id, timerId);
     }
   });
 });

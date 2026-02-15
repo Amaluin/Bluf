@@ -115,6 +115,18 @@
         </div>
       </section>
     </main>
+
+    <!-- Чат: раскрывающаяся панель в левом верхнем углу -->
+    <div id="chat-widget" class="chat-widget hidden">
+      <button id="chat-toggle" class="chat-toggle" type="button" aria-label="Чат">Чат</button>
+      <div id="chat-panel" class="chat-panel">
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input-row">
+          <input id="chat-input" class="chat-input" type="text" placeholder="Сообщение..." maxlength="2000" autocomplete="off">
+          <button id="chat-send" class="chat-send" type="button" aria-label="Отправить">→</button>
+        </div>
+      </div>
+    </div>
   </div>
   <script src="config.js"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
