@@ -194,7 +194,7 @@ body {
   }
   .my-area {
     padding: 0.35rem 0.35rem 0;
-    padding-bottom: max(0.35rem, var(--safe-bottom));
+    padding-bottom: max(1rem, var(--safe-bottom));
     flex: 0 0 auto;
   }
   .hand {
@@ -852,6 +852,7 @@ body {
   min-height: 50dvh;
   box-sizing: border-box;
   overflow-x: hidden;
+  padding-bottom: max(1rem, var(--safe-bottom));
 }
 
 .game-info {
@@ -1140,7 +1141,7 @@ body {
 
 .opponents {
   position: relative;
-  min-height: 80px;
+  min-height: 100px;
   margin: 0.3rem 0;
   display: flex;
   justify-content: center;
@@ -1148,7 +1149,7 @@ body {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .opponent {
@@ -1414,8 +1415,9 @@ body {
 .my-area {
   position: relative;
   overflow: visible;
+  flex-shrink: 0;
   padding: 0.5rem 0.5rem 0;
-  padding-bottom: max(0.5rem, var(--safe-bottom));
+  padding-bottom: max(1rem, var(--safe-bottom));
 }
 
 /* Р СѓРєР° РІРµРµСЂРѕРј: РєР°СЂС‚С‹ РїРµСЂРµРєСЂС‹РІР°СЋС‚СЃСЏ, СЃ РєСЂР°СЋ РІРёРґРЅРѕ РґРѕСЃС‚РѕРёРЅСЃС‚РІРѕ Рё РјР°СЃС‚СЊ */

@@ -71,11 +71,12 @@ var chatColorIndex = 0;
 function getLobbyIceServers() {
   var servers = [{ urls: 'stun:stun.l.google.com:19302' }];
   var turn = typeof window !== 'undefined' && window.BLUF_TURN;
-  if (turn && turn.url) {
-    servers.push({
-      urls: turn.url,
-      username: turn.username || '',
-      credential: turn.credential || ''
+  if (turn && (turn.url || (turn.urls && turn.urls.length))) {
+    var urls = turn.urls && turn.urls.length ? turn.urls : [turn.url];
+    var user = turn.username || '';
+    var cred = turn.credential || '';
+    urls.forEach(function (u) {
+      if (u) servers.push({ urls: u, username: user, credential: cred });
     });
   }
   return { iceServers: servers };
@@ -555,11 +556,11 @@ function updateGameUI(state) {
     var camBtn = myVideoWrap.querySelector('.game-btn-cam');
     var micBtn = myVideoWrap.querySelector('.game-btn-mic');
     if (camBtn) {
-      camBtn.textContent = 'Камера ' + (myState.cam ? 'вкл' : 'выкл');
+      camBtn.textContent = myState.cam ? 'Камера выкл' : 'Камера вкл';
       camBtn.classList.toggle('lobby-btn-off', !myState.cam);
     }
     if (micBtn) {
-      micBtn.textContent = 'Микрофон ' + (myState.mic ? 'вкл' : 'выкл');
+      micBtn.textContent = myState.mic ? 'Микрофон выкл' : 'Микрофон вкл';
       micBtn.classList.toggle('lobby-btn-off', !myState.mic);
     }
   }
@@ -1032,6 +1033,11 @@ function getOrCreateLobbyPeer(remoteSocketId) {
     }
   };
   pc.onconnectionstatechange = function () {
+    if (pc.connectionState === 'connected' || pc.connectionState === 'completed') {
+      console.log('[Bluf] ICE connected to', remoteSocketId);
+    } else if (pc.connectionState === 'failed') {
+      console.warn('[Bluf] ICE failed for', remoteSocketId, '(TURN/STUN или сеть?)');
+    }
     if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
       delete lobbyRemoteStreams[remoteSocketId];
     }
@@ -1109,8 +1115,8 @@ function renderLobbyWithVideos(players) {
       var camClass = myState.cam ? '' : ' lobby-btn-off';
       var micClass = myState.mic ? '' : ' lobby-btn-off';
       buttonsHtml = '<div class="lobby-player-buttons">' +
-        '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle' + camClass + '" data-action="cam">Камера ' + (myState.cam ? 'вкл' : 'выкл') + '</button>' +
-        '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle' + micClass + '" data-action="mic">Микрофон ' + (myState.mic ? 'вкл' : 'выкл') + '</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle' + camClass + '" data-action="cam">' + (myState.cam ? 'Камера выкл' : 'Камера вкл') + '</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle' + micClass + '" data-action="mic">' + (myState.mic ? 'Микрофон выкл' : 'Микрофон вкл') + '</button>' +
         '</div>';
     } else {
       var soundLabel = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
@@ -1507,11 +1513,11 @@ function init() {
         var camBtn = wrap.querySelector('.game-btn-cam');
         var micBtn = wrap.querySelector('.game-btn-mic');
         if (camBtn) {
-          camBtn.textContent = 'Камера ' + (myState.cam ? 'вкл' : 'выкл');
+          camBtn.textContent = myState.cam ? 'Камера выкл' : 'Камера вкл';
           camBtn.classList.toggle('lobby-btn-off', !myState.cam);
         }
         if (micBtn) {
-          micBtn.textContent = 'Микрофон ' + (myState.mic ? 'вкл' : 'выкл');
+          micBtn.textContent = myState.mic ? 'Микрофон выкл' : 'Микрофон вкл';
           micBtn.classList.toggle('lobby-btn-off', !myState.mic);
         }
       }

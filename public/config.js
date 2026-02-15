@@ -9,6 +9,13 @@ window.BLUF_SERVER_URL = 'https://2.56.241.41:3000';
  * TURN-сервер для видео/звука на смартфонах и за строгим NAT.
  * Без TURN на мобильном оппоненты часто не видны и не слышны.
  * Если подняли coturn на том же сервере — укажите сюда (см. docs/TURN.md).
- * Пример: { url: 'turn:2.56.241.41:3478', username: 'bluf', credential: 'ваш-пароль' }
+ * Можно задать url (одна строка) или urls (массив). Для мобильных лучше добавить turns:5349.
  */
-window.BLUF_TURN = null;
+window.BLUF_TURN = {
+  urls: [
+    'turn:2.56.241.41:3478',
+    'turns:2.56.241.41:5349'
+  ],
+  username: 'bluf',
+  credential: 'moyaTURNsecret'
+};
