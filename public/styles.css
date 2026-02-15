@@ -840,7 +840,7 @@ body {
 
 .opponents {
   position: relative;
-  min-height: 90px;
+  min-height: 120px;
   margin: 0.4rem 0;
   display: flex;
   justify-content: center;
@@ -868,33 +868,33 @@ body {
 
 /* РџРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёРµ РёРіСЂРѕРєРѕРІ РІРѕРєСЂСѓРі РѕРІР°Р»СЊРЅРѕРіРѕ СЃС‚РѕР»Р° */
 .opponent:nth-child(1) {
-  top: -10px;
+  top: 5%;
   left: 50%;
   transform: translateX(-50%);
   animation-delay: 0.05s;
 }
 
 .opponent:nth-child(2) {
-  top: 10%;
+  top: 20%;
   right: 5%;
   animation-delay: 0.1s;
 }
 
 .opponent:nth-child(3) {
   top: 50%;
-  right: -5%;
+  right: 0;
   transform: translateY(-50%);
   animation-delay: 0.15s;
 }
 
 .opponent:nth-child(4) {
-  bottom: 10%;
+  bottom: 20%;
   right: 5%;
   animation-delay: 0.2s;
 }
 
 .opponent:nth-child(5) {
-  bottom: 10%;
+  bottom: 20%;
   left: 5%;
   animation-delay: 0.25s;
 }
@@ -914,19 +914,19 @@ body {
 
 /* Р”Р»СЏ 3 РёРіСЂРѕРєРѕРІ - С‚СЂРµСѓРіРѕР»СЊРЅРёРє */
 .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(1) {
-  top: -10px;
+  top: 5%;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(2) {
-  bottom: 5%;
+  bottom: 15%;
   right: 10%;
   transform: none;
 }
 
 .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(3) {
-  bottom: 5%;
+  bottom: 15%;
   left: 10%;
   transform: none;
 }
@@ -1036,27 +1036,25 @@ body {
 
 /* Hand & cards */
 .my-area {
-  background: var(--felt-light);
-  border: 1px solid var(--felt-border);
-  border-radius: 10px;
-  padding: 0.5rem;
   position: relative;
   overflow: visible;
+  padding: 0.5rem 0.5rem 0;
 }
 
 /* Р СѓРєР° РІРµРµСЂРѕРј: РєР°СЂС‚С‹ РїРµСЂРµРєСЂС‹РІР°СЋС‚СЃСЏ, СЃ РєСЂР°СЋ РІРёРґРЅРѕ РґРѕСЃС‚РѕРёРЅСЃС‚РІРѕ Рё РјР°СЃС‚СЊ */
 .hand {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: flex-end;
   min-height: 58px;
   margin-bottom: 0.5rem;
   padding: 0 4px;
   touch-action: manipulation;
-  overflow-x: auto;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
+  position: relative;
+  gap: 0;
 }
 
 .hand .card-in-hand {
@@ -1064,7 +1062,6 @@ body {
   height: 50px;
   min-width: 36px;
   min-height: 50px;
-  margin-left: -28px;
   flex-shrink: 0;
   border-radius: 3px;
   background: var(--cream);
@@ -1088,6 +1085,16 @@ body {
   z-index: 0;
   animation: cardDeal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
   padding: 2px 0 0 3px;
+  margin-left: -28px;
+}
+
+.hand .card-in-hand:first-child {
+  margin-left: 0;
+}
+
+/* Для 10+ карт - переносим на второй ряд */
+.hand:has(.card-in-hand:nth-child(11)) .card-in-hand:nth-child(n+6) {
+  margin-top: -10px;
 }
 
 @keyframes cardDeal {
@@ -1099,10 +1106,6 @@ body {
     opacity: 1;
     transform: translateX(0) rotate(0deg);
   }
-}
-
-.hand .card-in-hand:first-child {
-  margin-left: 0;
 }
 
 .hand .card-in-hand .card-corner {
@@ -1129,11 +1132,9 @@ body {
 
 /* Р’С‹Р±СЂР°РЅРЅР°СЏ РєР°СЂС‚Р° РІС‹РµР·Р¶Р°РµС‚ РёР· РІРµРµСЂР° Рё РІРёРґРЅР° С†РµР»РёРєРѕРј; РїСЂРё РЅРµСЃРєРѕР»СЊРєРёС… вЂ” Р»С‘РіРєРёР№ СЃРґРІРёРі */
 .hand .card-in-hand.selected {
-  --selected-offset: calc(var(--selected-index, 0) * 6px);
-  transform: translateY(-16px) translateX(var(--selected-offset, 0px));
-  z-index: 10;
+  transform: translateY(-16px) !important;
+  z-index: 100 !important;
   box-shadow: 0 8px 20px var(--shadow), 0 0 0 2px var(--gold);
-  margin-left: -20px;
   animation: cardSelect 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -1142,30 +1143,30 @@ body {
     transform: translateY(0) scale(1);
   }
   30% {
-    transform: translateY(-24px) scale(1.08) rotate(2deg);
+    transform: translateY(-20px) scale(1.08);
   }
   50% {
-    transform: translateY(-18px) scale(1.02) rotate(-1deg);
+    transform: translateY(-14px) scale(1.02);
   }
   70% {
-    transform: translateY(-20px) scale(1.05) rotate(0.5deg);
+    transform: translateY(-18px) scale(1.05);
   }
   100% {
-    transform: translateY(-16px) translateX(var(--selected-offset, 0px)) scale(1) rotate(0deg);
+    transform: translateY(-16px) scale(1);
   }
 }
 
 /* РЈР»СѓС‡С€РµРЅРЅРѕРµ РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ РґР»СЏ РјРѕР±РёР»СЊРЅС‹С… */
 .hand .card-in-hand:active {
-  z-index: 5;
-  transform: translateY(-10px) scale(1.02);
+  z-index: 99 !important;
+  transform: translateY(-10px) scale(1.02) !important;
 }
 
 /* РЈР±РёСЂР°РµРј hover СЌС„С„РµРєС‚ РЅР° РјРѕР±РёР»СЊРЅС‹С… СѓСЃС‚СЂРѕР№СЃС‚РІР°С… */
 @media (hover: hover) and (pointer: fine) {
   .hand .card-in-hand:hover {
-    z-index: 5;
-    transform: translateY(-8px);
+    z-index: 98 !important;
+    transform: translateY(-8px) !important;
   }
 }
 
@@ -1262,8 +1263,8 @@ body {
     height: 62px;
     min-width: 46px;
     min-height: 62px;
-    margin-left: -26px;
   }
+
   .hand .card-in-hand .rank {
     font-size: 0.85rem;
   }
@@ -1290,8 +1291,9 @@ body {
     height: 68px;
     min-width: 50px;
     min-height: 68px;
-    margin-left: -28px;
   }
+
+  /* Адаптивное перекрытие для экранов 480px+ */
 
   .hand .card-in-hand .rank {
     font-size: 0.9rem;
@@ -1313,8 +1315,9 @@ body {
     height: 74px;
     min-width: 54px;
     min-height: 74px;
-    margin-left: -30px;
   }
+
+  /* Адаптивное перекрытие для экранов 640px+ */
 
   .hand .card-in-hand .rank {
     font-size: 0.95rem;
@@ -1693,32 +1696,7 @@ body {
   }
 }
 
-/* Discard pile shimmer effect */
-.discard-cards::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    45deg,
-    transparent 30%,
-    rgba(201, 162, 39, 0.3) 50%,
-    transparent 70%
-  );
-  animation: shimmer 3s infinite;
-  pointer-events: none;
-}
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%) translateY(-100%) rotate(45deg);
-  }
-  100% {
-    transform: translateX(100%) translateY(100%) rotate(45deg);
-  }
-}
+/* Discard pile shimmer effect - removed for cleaner look */
 
 /* Rank button press feedback */
 .rank-btn:active {
