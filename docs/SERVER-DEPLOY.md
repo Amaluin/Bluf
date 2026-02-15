@@ -2,12 +2,28 @@
 
 ## 1. Подтянуть изменения с GitHub
 
+**Рекомендуемый способ на сервере — просто взять всё из `main`** (без merge и без открытия редактора):
+
+```bash
+cd ~/Bluf
+git fetch origin
+git reset --hard origin/main
+```
+
+Сервер будет в точности как на GitHub. Локальные коммиты на сервере при этом теряются (для сервера это обычно нормально).
+
+---
+
+### Вариант через git pull (если нужны свои коммиты на сервере)
+
 ```bash
 cd ~/Bluf
 git pull origin main --no-rebase
 ```
 
-Если Git пишет *"Need to specify how to reconcile divergent branches"*, один раз настройте merge:
+Если откроется редактор (nano) для сообщения merge — сохраните и выйдите: **Ctrl+O**, Enter, **Ctrl+X**.
+
+Если Git пишет *"Need to specify how to reconcile divergent branches"*:
 
 ```bash
 git config pull.rebase false
@@ -24,15 +40,6 @@ git pull origin main
 ```bash
 git add docs/TURN.md
 git commit -m "Merge: resolve conflict"
-```
-
-### Если локальные коммиты на сервере не нужны
-
-Привести сервер в точности к состоянию GitHub (осторожно: локальные изменения пропадут):
-
-```bash
-git fetch origin
-git reset --hard origin/main
 ```
 
 ---
@@ -71,6 +78,7 @@ sudo systemctl restart bluf
 
 ```bash
 cd ~/Bluf
-git pull origin main --no-rebase
+git fetch origin
+git reset --hard origin/main
 sudo systemctl restart bluf
 ```
