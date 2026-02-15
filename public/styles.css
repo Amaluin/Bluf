@@ -201,6 +201,7 @@ body {
     min-height: 48px;
     margin-bottom: 0.35rem;
     padding: 0 2px;
+    max-width: 102px;
   }
   .hand .card-in-hand {
     width: 30px;
@@ -1308,12 +1309,13 @@ body {
   margin-left: 0;
 }
 
-/* Для 10+ карт - переносим на второй ряд */
-.hand:has(.card-in-hand:nth-child(11)) .card-in-hand:nth-child(n+6) {
-  margin-top: -10px;
+/* Не более 10 карт в ряду — ширина руки под 10 карт, остальные переносятся */
+.hand {
+  max-width: 108px;
 }
+/* 10 карт: 36 + 9*(36-28) = 108 */
 
-/* Узкие экраны (до 360px): компактнее карты, раньше второй ряд */
+/* Узкие экраны (до 360px): компактнее карты */
 @media (max-width: 360px) {
   .hand .card-in-hand {
     width: 32px;
@@ -1325,37 +1327,26 @@ body {
   }
   .hand .card-in-hand .rank { font-size: 0.65rem; }
   .hand .card-in-hand .suit { font-size: 0.55rem; }
-  .hand { min-height: 50px; padding: 0 2px; }
-  .hand:has(.card-in-hand:nth-child(8)) .card-in-hand:nth-child(n+5) { margin-top: -8px; }
+  .hand { min-height: 50px; padding: 0 2px; max-width: 140px; }
 }
+/* 10 карт: 32 + 9*12 = 140 */
 
 /* До 400px: меньше перекрытие — проще попасть по карте */
 @media (max-width: 400px) {
   .hand .card-in-hand { margin-left: -24px; }
+  .hand { max-width: 144px; }
 }
+/* 10 карт: 36 + 9*12 = 144 */
 
-/* Смартфоны: горизонтальный скролл руки (свайп влево-вправо) */
+/* Смартфоны: до 10 карт в ряд, перенос на следующую строку */
 @media (max-width: 480px) {
   .hand {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: visible;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    justify-content: flex-start;
-    padding-left: 8px;
-    padding-right: 8px;
-    margin-left: -4px;
-    margin-right: -4px;
+    flex-wrap: wrap;
+    max-width: 284px;
+    justify-content: center;
+    padding-left: 4px;
+    padding-right: 4px;
   }
-  .hand::-webkit-scrollbar { display: none; }
-  .hand .card-in-hand {
-    scroll-snap-align: start;
-    scroll-margin-left: 8px;
-  }
-  /* Второй ряд отключаем при скролле */
-  .hand:has(.card-in-hand:nth-child(11)) .card-in-hand:nth-child(n+6) { margin-top: 0; }
   .hand .card-in-hand.selected { scroll-margin-left: 8px; scroll-margin-right: 8px; }
 }
 
@@ -1520,6 +1511,9 @@ body {
     min-height: 72px;
   }
 
+  .hand {
+    max-width: 244px;
+  }
   .hand .card-in-hand {
     width: 46px;
     height: 62px;
@@ -1546,6 +1540,7 @@ body {
 @media (min-width: 480px) {
   .hand {
     min-height: 76px;
+    max-width: 284px;
   }
 
   .hand .card-in-hand {
@@ -1570,6 +1565,7 @@ body {
 @media (min-width: 640px) {
   .hand {
     min-height: 80px;
+    max-width: 324px;
   }
 
   .hand .card-in-hand {

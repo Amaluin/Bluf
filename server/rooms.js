@@ -203,16 +203,18 @@ function trust(roomCode, socketId) {
   if (playerIndex === -1) return { ok: false, error: 'not_in_room' };
   if (room.currentPlayerIndex !== playerIndex) return { ok: false, error: 'not_your_turn' };
 
-  // Если "Верю" и там действительно те карты, карты уходят в отбой
+ // Если "Верю" и там действительно те карты, карты уходят в отбой и ход переходит тому, кто сказал «Верю»
   const lastPlay = room.pile[room.pile.length - 1];
-  if (lastPlay && cardsMatchClaim(lastPlay.cardIds, lastPlay.claimedRank)) {
+  const wasRight = lastPlay && cardsMatchClaim(lastPlay.cardIds, lastPlay.claimedRank);
+  if (wasRight) {
     const allCards = room.pile.flatMap(p => p.cardIds);
     room.discard.push(...allCards);
     room.pile = [];
     room.lastClaim = null;
+    room.currentPlayerIndex = playerIndex;
+  } else {
+    room.currentPlayerIndex = (playerIndex + 1) % room.players.length;
   }
-
-  room.currentPlayerIndex = (playerIndex + 1) % room.players.length;
   return { ok: true, nextPlayerIndex: room.currentPlayerIndex };
 }
 
