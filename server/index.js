@@ -176,17 +176,25 @@ io.on('connection', (socket) => {
 
   socket.on('chat_message', ({ roomCode, text }, cb) => {
     const code = roomCode && String(roomCode).toUpperCase().trim();
+    console.log('[chat] received from', socket.id, { roomCode: code, textLen: (text && String(text).length) || 0 });
     const room = getRoom(code);
-    if (!room) return cb?.({ ok: false, error: 'room_not_found' });
+    if (!room) {
+      console.log('[chat] error: room_not_found', code);
+      return cb?.({ ok: false, error: 'room_not_found' });
+    }
     const player = room.players.find(p => p.socketId === socket.id);
-    if (!player) return cb?.({ ok: false, error: 'not_in_room' });
+    if (!player) {
+      console.log('[chat] error: not_in_room', socket.id, code);
+      return cb?.({ ok: false, error: 'not_in_room' });
+    }
     const msg = String(text ?? '').trim();
-    if (!msg) return cb?.({ ok: true });
-    io.to(code).emit('chat_message', {
-      playerName: player.name,
-      playerId: player.id,
-      text: msg,
-    });
+    if (!msg) {
+      console.log('[chat] empty msg, ack only');
+      return cb?.({ ok: true });
+    }
+    const payload = { playerName: player.name, playerId: player.id, text: msg };
+    console.log('[chat] broadcast to room', code, payload.playerName);
+    io.to(code).emit('chat_message', payload);
     cb?.({ ok: true });
   });
 

@@ -1346,6 +1346,23 @@ body {
   margin-left: 0;
 }
 
+/* Порядок по слоям: карты справа поверх выбранных, чтобы выбранные не загораживали руку */
+.hand .card-in-hand:nth-child(1) { z-index: 1; }
+.hand .card-in-hand:nth-child(2) { z-index: 2; }
+.hand .card-in-hand:nth-child(3) { z-index: 3; }
+.hand .card-in-hand:nth-child(4) { z-index: 4; }
+.hand .card-in-hand:nth-child(5) { z-index: 5; }
+.hand .card-in-hand:nth-child(6) { z-index: 6; }
+.hand .card-in-hand:nth-child(7) { z-index: 7; }
+.hand .card-in-hand:nth-child(8) { z-index: 8; }
+.hand .card-in-hand:nth-child(9) { z-index: 9; }
+.hand .card-in-hand:nth-child(10) { z-index: 10; }
+.hand .card-in-hand:nth-child(11) { z-index: 11; }
+.hand .card-in-hand:nth-child(12) { z-index: 12; }
+.hand .card-in-hand:nth-child(13) { z-index: 13; }
+.hand .card-in-hand:nth-child(14) { z-index: 14; }
+.hand .card-in-hand:nth-child(15) { z-index: 15; }
+
 /* Не более 14 карт в ряду — ширина руки под 14 карт, остальные переносятся; рука по центру */
 .hand {
   max-width: 168px;
@@ -1423,7 +1440,6 @@ body {
 /* Р’С‹Р±СЂР°РЅРЅР°СЏ РєР°СЂС‚Р° РІС‹РµР·Р¶Р°РµС‚ РёР· РІРµРµСЂР° Рё РІРёРґРЅР° С†РµР»РёРєРѕРј; РїСЂРё РЅРµСЃРєРѕР»СЊРєРёС… вЂ” Р»С‘РіРєРёР№ СЃРґРІРёРі */
 .hand .card-in-hand.selected {
   transform: translateY(-16px) !important;
-  z-index: 100 !important;
   box-shadow: 0 8px 20px var(--shadow), 0 0 0 2px var(--gold);
   animation: cardSelect 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -1448,14 +1464,12 @@ body {
 
 /* РЈР»СѓС‡С€РµРЅРЅРѕРµ РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ РґР»СЏ РјРѕР±РёР»СЊРЅС‹С… */
 .hand .card-in-hand:active {
-  z-index: 99 !important;
   transform: translateY(-10px) scale(1.02) !important;
 }
 
 /* РЈР±РёСЂР°РµРј hover СЌС„С„РµРєС‚ РЅР° РјРѕР±РёР»СЊРЅС‹С… СѓСЃС‚СЂРѕР№СЃС‚РІР°С… */
 @media (hover: hover) and (pointer: fine) {
   .hand .card-in-hand:hover {
-    z-index: 98 !important;
     transform: translateY(-8px) !important;
   }
 }
@@ -1800,16 +1814,21 @@ body {
   padding: 0.5rem 0;
 }
 
-/* Чат: раскрывающаяся панель в левом верхнем углу */
+/* Чат: раскрывающаяся панель в левом верхнем углу, всегда поверх игры */
 .chat-widget {
   position: fixed;
   top: var(--safe-top);
   left: 0;
-  z-index: 9000;
+  z-index: 99999;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   max-height: calc(100dvh - var(--safe-top));
+  pointer-events: none;
+}
+
+.chat-widget > * {
+  pointer-events: auto;
 }
 
 .chat-widget.hidden {
@@ -1817,16 +1836,22 @@ body {
 }
 
 .chat-toggle {
-  padding: 0.4rem 0.65rem;
-  font-size: 0.8rem;
-  font-weight: 500;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 600;
   color: var(--cream);
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid var(--felt-border);
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid var(--gold);
+  border-radius: 8px;
   cursor: pointer;
-  margin: 0.35rem;
-  transition: background 0.2s;
+  margin: 0.4rem;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.chat-toggle:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .chat-toggle:hover {

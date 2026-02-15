@@ -29,6 +29,25 @@ let socket = null;
 let roomCode = null;
 let myPlayerId = null; // Уникальный ID игрока для переподключения
 let myIndex = -1;
+
+const SESSION_ROOM = 'bluf_room';
+const SESSION_PLAYER = 'bluf_player';
+
+function persistRoom() {
+  try {
+    if (roomCode) sessionStorage.setItem(SESSION_ROOM, roomCode); else sessionStorage.removeItem(SESSION_ROOM);
+    if (myPlayerId) sessionStorage.setItem(SESSION_PLAYER, myPlayerId); else sessionStorage.removeItem(SESSION_PLAYER);
+  } catch (e) {}
+}
+
+function restoreRoomFromStorage() {
+  try {
+    var r = sessionStorage.getItem(SESSION_ROOM);
+    var p = sessionStorage.getItem(SESSION_PLAYER);
+    if (r) roomCode = r;
+    if (p) myPlayerId = p;
+  } catch (e) {}
+}
 let myHand = [];
 let gameState = null;
 let selectedCards = new Set();
@@ -49,6 +68,7 @@ var lobbyMediaRequested = false;
 var localLobbyStream = null;
 var lobbyPeerConnections = {};
 var lobbyRemoteStreams = {};
+var lastLobbyState = null;
 
 const $ = (id) => document.getElementById(id);
 const showScreen = (id) => {
@@ -100,39 +120,17 @@ function connect() {
   socket.on('connect', () => {
     console.log('Connected');
 
-    // Если мы были в комнате, пытаемся переподключиться
     if (roomCode && myPlayerId) {
       console.log('Reconnecting to room:', roomCode, 'with playerId:', myPlayerId);
       socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
         if (res?.ok) {
           console.log('Successfully rejoined room');
-          if (res.roomCode) roomCode = res.roomCode;
-          myIndex = res.playerIndex;
-
-          // Запрашиваем текущее состояние игры
-          if (res.gameState) {
-            gameState = res.gameState;
-            myIndex = res.gameState.myIndex;
-            myHand = sortHand(res.gameState.myHand || []);
-            selectedCards.clear();
-            if (res.gameState.code) roomCode = res.gameState.code;
-            updateChatVisibility();
-            ensureChatColors(res.gameState.players || []);
-
-            // Определяем текущий экран на основе состояния
-            if (res.gameState.state === 'playing') {
-              showScreen('screen-game');
-              updateGameUI(res.gameState);
-            } else if (res.gameState.state === 'dice_roll') {
-              showScreen('screen-dice');
-            } else if (res.gameState.state === 'lobby') {
-              showScreen('screen-lobby');
-            }
-          }
+          applyRejoinState(res);
         } else {
           console.log('Failed to rejoin room, returning to welcome screen');
           roomCode = null;
           myPlayerId = null;
+          persistRoom();
           showScreen('screen-welcome');
         }
       });
@@ -164,12 +162,18 @@ function connect() {
     ensureChatColors(state.players || []);
     $('lobby-code').textContent = state.code;
 
-    if (state.state === 'lobby' && state.players && state.players.length) {
-      requestLobbyMedia().then(function () {
-        renderLobbyWithVideos(state.players);
-        ensureLobbyConnections(state.players);
-      });
+    if (state.state === 'lobby') {
+      lastLobbyState = state;
+      if (state.players && state.players.length) {
+        requestLobbyMedia().then(function () {
+          renderLobbyWithVideos(state.players);
+          ensureLobbyConnections(state.players);
+        });
+      } else {
+        renderLobbyWithVideos(state.players || []);
+      }
     } else {
+      lastLobbyState = null;
       renderLobbyWithVideos(state.players || []);
     }
 
@@ -244,12 +248,17 @@ function connect() {
     stopLobbyMedia();
     roomCode = null;
     myPlayerId = null;
+    persistRoom();
     updateChatVisibility();
     showScreen('screen-welcome');
   });
 
   socket.on('chat_message', (data) => {
-    if (!data || !data.playerName) return;
+    console.log('[chat] received:', data);
+    if (!data || !data.playerName) {
+      console.log('[chat] receive ignored: no data or playerName');
+      return;
+    }
     ensureChatColors([{ name: data.playerName }]);
     appendChatMessage(data.playerName, data.text);
   });
@@ -693,10 +702,22 @@ function appendChatMessage(playerName, text) {
 
 function sendChatMessage() {
   var input = document.getElementById('chat-input');
-  if (!input || !roomCode || !socket) return;
+  if (!input || !roomCode || !socket) {
+    console.log('[chat] send skipped: input=', !!input, 'roomCode=', roomCode, 'socket=', !!socket);
+    return;
+  }
   var text = (input.value || '').trim();
-  if (!text) return;
-  socket.emit('chat_message', { roomCode: roomCode, text: text }, function () {
+  if (!text) {
+    console.log('[chat] send skipped: empty text');
+    return;
+  }
+  console.log('[chat] sending:', { roomCode: roomCode, textLen: text.length, connected: socket.connected });
+  socket.emit('chat_message', { roomCode: roomCode, text: text }, function (err) {
+    if (err) {
+      console.warn('[chat] send callback error:', err);
+      return;
+    }
+    console.log('[chat] send ok');
     input.value = '';
   });
 }
@@ -973,89 +994,70 @@ function showCopyNotification(notification) {
   }, 2000);
 }
 
+function applyRejoinState(res) {
+  if (!res?.ok) return;
+  if (res.roomCode) roomCode = res.roomCode;
+  myIndex = res.playerIndex;
+  if (res.gameState) {
+    gameState = res.gameState;
+    myIndex = res.gameState.myIndex ?? res.playerIndex;
+    myHand = sortHand(res.gameState.myHand || []);
+    selectedCards.clear();
+    if (res.gameState.code) roomCode = res.gameState.code;
+    updateChatVisibility();
+    ensureChatColors(res.gameState.players || []);
+    if (res.gameState.state === 'playing') {
+      showScreen('screen-game');
+      updateGameUI(res.gameState);
+    } else if (res.gameState.state === 'dice_roll') {
+      showScreen('screen-dice');
+    } else if (res.gameState.state === 'lobby') {
+      showScreen('screen-lobby');
+    }
+  }
+  persistRoom();
+}
+
+function tryRejoinOnReturn() {
+  if (!roomCode || !myPlayerId || !socket) return;
+  console.log('Return to app: reconnecting/rejoining...');
+  socket.connect();
+  setTimeout(function () {
+    if (!socket.connected) return;
+    socket.emit('rejoin_room', { roomCode: roomCode, playerId: myPlayerId }, function (res) {
+      if (res?.ok) {
+        applyRejoinState(res);
+      } else {
+        socket.disconnect();
+        socket.connect();
+      }
+    });
+  }, 400);
+}
+
 function init() {
-  // Обработка видимости страницы
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && roomCode && socket) {
-      console.log('Page became visible, checking connection...');
+  restoreRoomFromStorage();
 
-      // Если соединение разорвано, пытаемся переподключиться
-      if (!socket.connected) {
-        console.log('Socket disconnected, reconnecting...');
-        socket.connect();
-      } else {
-        // Если соединение активно, запрашиваем обновление состояния
-        console.log('Socket connected, requesting state update...');
-        socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
-          if (res?.ok && res.gameState) {
-            gameState = res.gameState;
-            myIndex = res.gameState.myIndex ?? res.playerIndex;
-            myHand = sortHand(res.gameState.myHand || []);
-            selectedCards.clear();
-
-            if (res.gameState.state === 'playing') {
-              showScreen('screen-game');
-              updateGameUI(res.gameState);
-            } else if (res.gameState.state === 'dice_roll') {
-              showScreen('screen-dice');
-            } else if (res.gameState.state === 'lobby') {
-              showScreen('screen-lobby');
-            }
-          }
-        });
-      }
-    }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    if (!roomCode || !myPlayerId) return;
+    tryRejoinOnReturn();
   });
 
-  // Обработка событий для мобильных устройств (iOS/Android)
-  window.addEventListener('pageshow', (event) => {
-    if (event.persisted && roomCode && socket) {
-      console.log('Page restored from cache, checking connection...');
-
-      if (!socket.connected) {
-        socket.connect();
-      } else {
-        socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
-          if (res?.ok && res.gameState) {
-            gameState = res.gameState;
-            myIndex = res.gameState.myIndex ?? res.playerIndex;
-            myHand = sortHand(res.gameState.myHand || []);
-            selectedCards.clear();
-
-            if (res.gameState.state === 'playing') {
-              showScreen('screen-game');
-              updateGameUI(res.gameState);
-            } else if (res.gameState.state === 'dice_roll') {
-              showScreen('screen-dice');
-            } else if (res.gameState.state === 'lobby') {
-              showScreen('screen-lobby');
-            }
-          }
-        });
-      }
-    }
+  window.addEventListener('pageshow', function () {
+    if (!roomCode || !myPlayerId) return;
+    tryRejoinOnReturn();
   });
 
-  // Обработка возврата в приложение (для PWA)
-  window.addEventListener('focus', () => {
-    if (roomCode && socket && socket.connected) {
-      console.log('Window focused, checking state...');
-      socket.emit('rejoin_room', { roomCode, playerId: myPlayerId }, (res) => {
-        if (res?.ok && res.gameState) {
-          gameState = res.gameState;
-          myIndex = res.gameState.myIndex ?? res.playerIndex;
-          myHand = sortHand(res.gameState.myHand || []);
-          selectedCards.clear();
-          updateGameUI(res.gameState);
-          if (res.gameState.state === 'playing') {
-            showScreen('screen-game');
-          } else if (res.gameState.state === 'dice_roll') {
-            showScreen('screen-dice');
-          } else if (res.gameState.state === 'lobby') {
-            showScreen('screen-lobby');
-          }
-        }
-      });
+  window.addEventListener('focus', function () {
+    if (!roomCode || !myPlayerId || !socket) return;
+    if (!socket.connected) {
+      socket.connect();
+    } else {
+      setTimeout(function () {
+        if (!socket.connected) return;
+        socket.emit('rejoin_room', { roomCode: roomCode, playerId: myPlayerId }, applyRejoinState);
+      }, 200);
     }
   });
 
@@ -1066,6 +1068,7 @@ function init() {
         roomCode = res.roomCode;
         myPlayerId = res.playerId || null;
         myIndex = res.playerIndex;
+        persistRoom();
         isHost = true; // Создатель комнаты всегда хост
         updateChatVisibility();
         showScreen('screen-lobby');
@@ -1089,6 +1092,7 @@ function init() {
         roomCode = res.roomCode;
         myPlayerId = res.playerId || null;
         myIndex = res.playerIndex;
+        persistRoom();
         isHost = false; // Присоединившийся игрок не хост
         updateChatVisibility();
         showScreen('screen-lobby');
@@ -1123,9 +1127,22 @@ function init() {
     stopLobbyMedia();
     roomCode = null;
     myPlayerId = null;
+    persistRoom();
     updateChatVisibility();
     showScreen('screen-welcome');
   });
+
+  var btnLobbyCamera = document.getElementById('btn-lobby-camera');
+  if (btnLobbyCamera) {
+    btnLobbyCamera.addEventListener('click', function () {
+      requestLobbyMedia().then(function () {
+        if (lastLobbyState && lastLobbyState.players) {
+          renderLobbyWithVideos(lastLobbyState.players);
+          ensureLobbyConnections(lastLobbyState.players);
+        }
+      });
+    });
+  }
 
   // Копирование кода комнаты при клике
   $('lobby-code').addEventListener('click', copyRoomCode);
@@ -1143,8 +1160,10 @@ function init() {
   });
 
   $('btn-leave-game').addEventListener('click', () => {
+    stopLobbyMedia();
     roomCode = null;
     myPlayerId = null;
+    persistRoom();
     updateChatVisibility();
     showScreen('screen-welcome');
   });
