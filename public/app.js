@@ -1507,6 +1507,7 @@ function init() {
       var sid = li.getAttribute('data-socket-id');
       var isSelf = li.getAttribute('data-is-self') === '1';
       var action = btn.getAttribute('data-action');
+      // Камеру и микрофон переключать можно только у себя
       if (isSelf && action === 'cam') {
         if (!localLobbyStream) return;
         localLobbyStream.getVideoTracks().forEach(function (t) { t.enabled = !t.enabled; });
@@ -1527,7 +1528,10 @@ function init() {
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('.game-btn-cam, .game-btn-mic, .game-btn-sound');
     if (!btn) return;
+    // Камеру и микрофон пользователь может переключать только у себя (только в блоке «Вы»)
     if (btn.classList.contains('game-btn-cam') || btn.classList.contains('game-btn-mic')) {
+      var myWrap = document.getElementById('my-video-wrap');
+      if (!myWrap || !myWrap.contains(btn)) return;
       if (!localLobbyStream) return;
       var action = btn.getAttribute('data-action');
       if (action === 'cam') {
@@ -1536,21 +1540,19 @@ function init() {
         localLobbyStream.getAudioTracks().forEach(function (t) { t.enabled = !t.enabled; });
       }
       var myState = getMyLobbyCamMicState();
-      var wrap = document.getElementById('my-video-wrap');
-      if (wrap) {
-        var camBtn = wrap.querySelector('.game-btn-cam');
-        var micBtn = wrap.querySelector('.game-btn-mic');
-        if (camBtn) {
-          camBtn.textContent = myState.cam ? 'Камера выкл' : 'Камера вкл';
-          camBtn.classList.toggle('lobby-btn-off', !myState.cam);
-        }
-        if (micBtn) {
-          micBtn.textContent = myState.mic ? 'Микрофон выкл' : 'Микрофон вкл';
-          micBtn.classList.toggle('lobby-btn-off', !myState.mic);
-        }
+      var camBtn = myWrap.querySelector('.game-btn-cam');
+      var micBtn = myWrap.querySelector('.game-btn-mic');
+      if (camBtn) {
+        camBtn.textContent = myState.cam ? 'Камера выкл' : 'Камера вкл';
+        camBtn.classList.toggle('lobby-btn-off', !myState.cam);
+      }
+      if (micBtn) {
+        micBtn.textContent = myState.mic ? 'Микрофон выкл' : 'Микрофон вкл';
+        micBtn.classList.toggle('lobby-btn-off', !myState.mic);
       }
       return;
     }
+    // Звук у чужого видео — только локальное отключение воспроизведения, не управление чужим микрофоном
     if (btn.classList.contains('game-btn-sound')) {
       var sid = btn.getAttribute('data-socket-id');
       if (!sid) return;
