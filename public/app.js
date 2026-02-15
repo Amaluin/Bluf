@@ -750,10 +750,10 @@ function sendChatMessage() {
       clearTimeout(sendTimeout);
       sendTimeout = null;
     }
-    if (res && res.error) {
+    if (!res || !res.ok) {
       console.warn('[chat] send callback error:', res);
-      if (res.error === 'not_in_room') showChatError('Сессия устарела. Выйдите и зайдите в комнату снова.');
-      else if (res.error === 'room_not_found') showChatError('Комната не найдена.');
+      if (res && res.error === 'not_in_room') showChatError('Сессия устарела. Выйдите и зайдите в комнату снова.');
+      else if (res && res.error === 'room_not_found') showChatError('Комната не найдена.');
       else showChatError('Не удалось отправить.');
       return;
     }
@@ -1071,26 +1071,38 @@ function applyRejoinState(res) {
       showScreen('screen-dice');
     } else if (res.gameState.state === 'lobby') {
       showScreen('screen-lobby');
+      if (roomCode && $('lobby-code')) $('lobby-code').textContent = roomCode;
     }
   }
+  updateChatVisibility();
   persistRoom();
 }
 
 function tryRejoinOnReturn() {
+  restoreRoomFromStorage();
   if (!roomCode || !myPlayerId || !socket) return;
   console.log('Return to app: reconnecting/rejoining...');
-  socket.connect();
-  setTimeout(function () {
-    if (!socket.connected) return;
+  var rejoinDone = false;
+  function doRejoin() {
+    if (rejoinDone || !socket.connected) return;
+    rejoinDone = true;
     socket.emit('rejoin_room', { roomCode: roomCode, playerId: myPlayerId }, function (res) {
       if (res?.ok) {
         applyRejoinState(res);
       } else {
+        rejoinDone = false;
         socket.disconnect();
         socket.connect();
       }
     });
-  }, 400);
+  }
+  if (socket.connected) {
+    doRejoin();
+    return;
+  }
+  socket.once('connect', doRejoin);
+  socket.connect();
+  setTimeout(function () { doRejoin(); }, 800);
 }
 
 function init() {
@@ -1098,16 +1110,19 @@ function init() {
 
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) return;
+    restoreRoomFromStorage();
     if (!roomCode || !myPlayerId) return;
     tryRejoinOnReturn();
   });
 
-  window.addEventListener('pageshow', function () {
+  window.addEventListener('pageshow', function (e) {
+    restoreRoomFromStorage();
     if (!roomCode || !myPlayerId) return;
     tryRejoinOnReturn();
   });
 
   window.addEventListener('focus', function () {
+    restoreRoomFromStorage();
     if (!roomCode || !myPlayerId || !socket) return;
     if (!socket.connected) {
       socket.connect();
