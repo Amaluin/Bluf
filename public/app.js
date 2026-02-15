@@ -68,7 +68,9 @@ var lobbyMediaRequested = false;
 var localLobbyStream = null;
 var lobbyPeerConnections = {};
 var lobbyRemoteStreams = {};
-var lobbyRemoteMuted = {}; // для каждого сокета: выключен ли у нас звук этого участника
+var lobbyRemoteMuted = {};
+var lobbyIceQueue = {};
+var lobbyRetryIntervalId = null;
 var lastLobbyState = null;
 
 const $ = (id) => document.getElementById(id);
@@ -170,11 +172,22 @@ function connect() {
           renderLobbyWithVideos(state.players);
           ensureLobbyConnections(state.players);
         });
+        if (state.players.length >= 2) {
+          if (lobbyRetryIntervalId) clearInterval(lobbyRetryIntervalId);
+          lobbyRetryIntervalId = setInterval(function () {
+            if (!lastLobbyState || !lastLobbyState.players || lastLobbyState.players.length < 2) {
+              if (lobbyRetryIntervalId) { clearInterval(lobbyRetryIntervalId); lobbyRetryIntervalId = null; }
+              return;
+            }
+            ensureLobbyConnections(lastLobbyState.players);
+          }, 3000);
+        }
       } else {
         renderLobbyWithVideos(state.players || []);
       }
     } else {
       lastLobbyState = null;
+      if (lobbyRetryIntervalId) { clearInterval(lobbyRetryIntervalId); lobbyRetryIntervalId = null; }
       renderLobbyWithVideos(state.players || []);
     }
 
@@ -196,14 +209,27 @@ function connect() {
     }
   });
 
+  function drainLobbyIceQueue(remoteSocketId) {
+    var pc = lobbyPeerConnections[remoteSocketId];
+    var queue = lobbyIceQueue[remoteSocketId];
+    if (!pc || !queue || !queue.length) return;
+    delete lobbyIceQueue[remoteSocketId];
+    queue.forEach(function (c) {
+      pc.addIceCandidate(new RTCIceCandidate(c)).catch(function (err) { console.warn('Lobby addIceCandidate (drain):', err); });
+    });
+  }
+
   socket.on('webrtc_offer', function (data) {
     var fromSocketId = data.fromSocketId;
     var sdp = data.sdp;
     if (!fromSocketId || !sdp || !roomCode) return;
+    var existingPc = lobbyPeerConnections[fromSocketId];
+    if (existingPc && existingPc.localDescription && existingPc.localDescription.type === 'offer') return;
     function doAnswer() {
       var pc = getOrCreateLobbyPeer(fromSocketId);
       if (localLobbyStream) localLobbyStream.getTracks().forEach(function (t) { pc.addTrack(t, localLobbyStream); });
       pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(function () {
+        drainLobbyIceQueue(fromSocketId);
         return pc.createAnswer();
       }).then(function (answer) {
         return pc.setLocalDescription(answer);
@@ -221,16 +247,27 @@ function connect() {
     if (!fromSocketId || !sdp) return;
     var pc = lobbyPeerConnections[fromSocketId];
     if (!pc) return;
-    pc.setRemoteDescription(new RTCSessionDescription(sdp)).catch(function (err) { console.warn('Lobby setRemote answer:', err); });
+    pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(function () {
+      drainLobbyIceQueue(fromSocketId);
+    }).catch(function (err) { console.warn('Lobby setRemote answer:', err); });
   });
 
   socket.on('webrtc_ice', function (data) {
     var fromSocketId = data.fromSocketId;
     var candidate = data.candidate;
-    if (!fromSocketId) return;
+    if (!fromSocketId || !candidate) return;
     var pc = lobbyPeerConnections[fromSocketId];
-    if (!pc) return;
-    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(function (err) { console.warn('Lobby addIceCandidate:', err); });
+    if (!pc) {
+      if (!lobbyIceQueue[fromSocketId]) lobbyIceQueue[fromSocketId] = [];
+      lobbyIceQueue[fromSocketId].push(candidate);
+      return;
+    }
+    if (pc.remoteDescription) {
+      pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(function (err) { console.warn('Lobby addIceCandidate:', err); });
+    } else {
+      if (!lobbyIceQueue[fromSocketId]) lobbyIceQueue[fromSocketId] = [];
+      lobbyIceQueue[fromSocketId].push(candidate);
+    }
   });
 
   socket.on('dice_rolled', (diceRolls) => {
@@ -845,6 +882,7 @@ function stopLobbyMedia() {
   lobbyPeerConnections = {};
   lobbyRemoteStreams = {};
   lobbyRemoteMuted = {};
+  lobbyIceQueue = {};
 }
 
 function getOrCreateLobbyPeer(remoteSocketId) {
@@ -905,13 +943,19 @@ function ensureLobbyConnections(players) {
   var currentIds = players.map(function (p) { return p.socketId; }).filter(Boolean);
   currentIds.forEach(function (sid) {
     if (sid === myId) return;
-    if (myId < sid) createLobbyOffer(sid);
+    if (myId < sid) {
+      var pc = lobbyPeerConnections[sid];
+      if (!pc || pc.connectionState === 'new' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        createLobbyOffer(sid);
+      }
+    }
   });
   Object.keys(lobbyPeerConnections).forEach(function (sid) {
     if (currentIds.indexOf(sid) === -1) {
       try { lobbyPeerConnections[sid].close(); } catch (e) {}
       delete lobbyPeerConnections[sid];
       delete lobbyRemoteStreams[sid];
+      delete lobbyIceQueue[sid];
     }
   });
 }
@@ -946,17 +990,23 @@ function renderLobbyWithVideos(players) {
     var videoHtml = hasVideo
       ? '<video class="lobby-video-el" autoplay playsinline ' + (isSelf ? 'muted ' : '') + 'style="transform:scaleX(' + (isSelf ? '-1' : '1') + ')"></video>'
       : '<div class="lobby-video-placeholder"></div>';
-    var btnLabel;
+    var buttonsHtml;
     if (isSelf) {
-      btnLabel = myState.cam || myState.mic ? 'Выкл. камеру и микрофон' : 'Вкл. камеру и микрофон';
+      var camClass = myState.cam ? '' : ' lobby-btn-off';
+      var micClass = myState.mic ? '' : ' lobby-btn-off';
+      buttonsHtml = '<div class="lobby-player-buttons">' +
+        '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle' + camClass + '" data-action="cam">Камера ' + (myState.cam ? 'вкл' : 'выкл') + '</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle' + micClass + '" data-action="mic">Микрофон ' + (myState.mic ? 'вкл' : 'выкл') + '</button>' +
+        '</div>';
     } else {
-      btnLabel = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
+      var soundLabel = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
+      buttonsHtml = '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle" data-action="sound">' + escapeHtml(soundLabel) + '</button>';
     }
     return '<li class="lobby-player" data-socket-id="' + escapeHtml(sid) + '" data-is-self="' + (isSelf ? '1' : '0') + '">' +
       '<div class="lobby-video-wrap">' + videoHtml + '</div>' +
       '<div class="lobby-player-info">' +
       '<span class="lobby-player-name">' + name + '</span>' +
-      '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle">' + escapeHtml(btnLabel) + '</button>' +
+      buttonsHtml +
       '</div></li>';
   }).join('');
   list.querySelectorAll('.lobby-video-el').forEach(function (video, i) {
@@ -1274,7 +1324,9 @@ function init() {
   });
 
   $('btn-leave-lobby').addEventListener('click', () => {
+    if (lobbyRetryIntervalId) { clearInterval(lobbyRetryIntervalId); lobbyRetryIntervalId = null; }
     stopLobbyMedia();
+    lastLobbyState = null;
     roomCode = null;
     myPlayerId = null;
     persistRoom();
@@ -1303,18 +1355,16 @@ function init() {
       if (!li) return;
       var sid = li.getAttribute('data-socket-id');
       var isSelf = li.getAttribute('data-is-self') === '1';
-      if (isSelf) {
+      var action = btn.getAttribute('data-action');
+      if (isSelf && action === 'cam') {
         if (!localLobbyStream) return;
-        var state = getMyLobbyCamMicState();
-        if (state.cam || state.mic) {
-          localLobbyStream.getVideoTracks().forEach(function (t) { t.enabled = false; });
-          localLobbyStream.getAudioTracks().forEach(function (t) { t.enabled = false; });
-        } else {
-          localLobbyStream.getVideoTracks().forEach(function (t) { t.enabled = true; });
-          localLobbyStream.getAudioTracks().forEach(function (t) { t.enabled = true; });
-        }
+        localLobbyStream.getVideoTracks().forEach(function (t) { t.enabled = !t.enabled; });
         if (lastLobbyState && lastLobbyState.players) renderLobbyWithVideos(lastLobbyState.players);
-      } else {
+      } else if (isSelf && action === 'mic') {
+        if (!localLobbyStream) return;
+        localLobbyStream.getAudioTracks().forEach(function (t) { t.enabled = !t.enabled; });
+        if (lastLobbyState && lastLobbyState.players) renderLobbyWithVideos(lastLobbyState.players);
+      } else if (!isSelf && action === 'sound') {
         lobbyRemoteMuted[sid] = !lobbyRemoteMuted[sid];
         var video = li.querySelector('.lobby-video-el');
         if (video) video.muted = !!lobbyRemoteMuted[sid];

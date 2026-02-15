@@ -3,9 +3,42 @@
  * Один экземпляр — одна комната (для простоты можно масштабировать через Map по roomId).
  */
 
-import { dealCards, cardsMatchClaim } from './game.js';
+import { dealCards, cardsMatchClaim, getRankFromId } from './game.js';
 
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+
+/**
+ * Если в руке есть 4 карты одного достоинства — переносит их в отбой.
+ * Повторяет, пока есть такие четвёрки (например, 8 карт одного достоинства).
+ * @returns {string[]} ранги, по которым карты ушли в отбой (для оповещения)
+ */
+function moveFourOfAKindToDiscard(hand, discard) {
+  const discardedRanks = [];
+  let again = true;
+  while (again) {
+    again = false;
+    const byRank = {};
+    for (const id of hand) {
+      const r = getRankFromId(id);
+      if (!byRank[r]) byRank[r] = [];
+      byRank[r].push(id);
+    }
+    for (const rank of RANKS) {
+      if (byRank[rank] && byRank[rank].length >= 4) {
+        const four = byRank[rank].slice(0, 4);
+        for (const id of four) {
+          const idx = hand.indexOf(id);
+          if (idx !== -1) hand.splice(idx, 1);
+        }
+        discard.push(...four);
+        discardedRanks.push(rank);
+        again = true;
+        break;
+      }
+    }
+  }
+  return discardedRanks;
+}
 
 const rooms = new Map();
 
@@ -119,6 +152,20 @@ function confirmDiceRoll(roomCode, socketId) {
   room.discard = [];
   room.lastClaim = null;
   room.winnerIndex = -1;
+
+  // 4 карты одного достоинства сразу уходят в отбой
+  room.players.forEach((p) => {
+    moveFourOfAKindToDiscard(p.hand, room.discard);
+  });
+  // Проверка победы после автоприбоя (если у кого-то 0 карт)
+  const withCards = room.players.filter(p => p.hand.length > 0);
+  if (withCards.length === 1) {
+    room.winnerIndex = room.players.findIndex(p => p.hand.length > 0);
+    room.state = 'finished';
+  } else if (withCards.length === 0) {
+    room.state = 'finished';
+  }
+
   return { ok: true };
 }
 
@@ -171,11 +218,20 @@ function challenge(roomCode, socketId) {
   room.pile = [];
   room.lastClaim = null;
 
+  // 4 карты одного достоинства сразу уходят в отбой
+  moveFourOfAKindToDiscard(loser.hand, room.discard);
+
   // Если блеф раскрыт, ход переходит к тому, кто раскрыл
   // Если не блеф, ход переходит к следующему игроку
   room.currentPlayerIndex = wasLying ? challengerIndex : (challengerIndex + 1) % room.players.length;
 
-  if (loser.hand.length >= 52) {
+  const withCards = room.players.filter(p => p.hand.length > 0);
+  if (withCards.length === 1) {
+    room.state = 'finished';
+    room.winnerIndex = room.players.findIndex(p => p.hand.length > 0);
+  } else if (withCards.length === 0) {
+    room.state = 'finished';
+  } else if (loser.hand.length >= 52) {
     room.state = 'finished';
     room.winnerIndex = room.players.findIndex((_, i) => i !== loserIndex && room.players[i].hand.length > 0);
     if (room.players.filter(p => p.hand.length > 0).length === 1) {

@@ -203,7 +203,7 @@ body {
     padding: 0 2px;
     max-width: 100%;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 0;
     row-gap: 0.5rem;
   }
   .hand .card-in-hand {
@@ -211,9 +211,10 @@ body {
     height: 52px;
     min-width: 38px;
     min-height: 52px;
-    margin: 0;
+    margin-left: -19px;
     padding: 1px 0 0 2px;
   }
+  .hand .card-in-hand:first-child { margin-left: 0; }
   .hand .card-in-hand .rank {
     font-size: 0.75rem;
   }
@@ -630,8 +631,8 @@ body {
 
 .lobby-video-wrap {
   flex-shrink: 0;
-  width: 104px;
-  height: 104px;
+  width: 208px;
+  height: 208px;
   border-radius: 50%;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.35);
@@ -663,11 +664,21 @@ body {
   font-weight: 500;
 }
 
+.lobby-player-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .lobby-btn-toggle {
   align-self: flex-start;
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
   min-height: auto;
+}
+
+.lobby-btn-toggle.lobby-btn-off {
+  opacity: 0.7;
 }
 
 .player-list li:nth-child(1) { animation-delay: 0.05s; }
@@ -1368,7 +1379,7 @@ body {
   touch-action: manipulation;
   overflow: visible;
   position: relative;
-  gap: 6px;
+  gap: 0;
   row-gap: 0.5rem;
   max-width: 320px;
 }
@@ -1398,11 +1409,11 @@ body {
   position: relative;
   z-index: 0;
   padding: 2px 0 0 3px;
-  margin: 0;
+  margin-left: -22px;
 }
 
 .hand .card-in-hand:first-child {
-  margin: 0;
+  margin-left: 0;
 }
 
 /* Порядок по слоям: карты справа поверх выбранных, чтобы выбранные не загораживали руку */
@@ -1423,24 +1434,26 @@ body {
 .hand .card-in-hand:nth-child(15) { z-index: 15; }
 
 
-/* Узкие экраны (до 360px) */
+/* Узкие экраны (до 360px): карта 38px — перекрытие наполовину = -19px */
 @media (max-width: 360px) {
-  .hand { gap: 5px; row-gap: 0.5rem; min-height: 58px; padding: 0 2px; max-width: 220px; }
+  .hand { gap: 0; row-gap: 0.5rem; min-height: 58px; padding: 0 2px; max-width: 220px; }
   .hand .card-in-hand {
     width: 38px;
     height: 52px;
     min-width: 38px;
     min-height: 52px;
-    margin: 0;
+    margin-left: -19px;
     padding: 1px 0 0 2px;
   }
+  .hand .card-in-hand:first-child { margin-left: 0; }
   .hand .card-in-hand .rank { font-size: 0.7rem; }
   .hand .card-in-hand .suit { font-size: 0.6rem; }
 }
 
 @media (max-width: 400px) {
-  .hand { gap: 6px; max-width: 260px; }
-  .hand .card-in-hand { margin: 0; }
+  .hand { gap: 0; max-width: 260px; }
+  .hand .card-in-hand { margin-left: -22px; }
+  .hand .card-in-hand:first-child { margin-left: 0; }
 }
 
 @media (max-width: 480px) {
@@ -1602,7 +1615,9 @@ body {
     height: 70px;
     min-width: 52px;
     min-height: 70px;
+    margin-left: -26px;
   }
+  .hand .card-in-hand:first-child { margin-left: 0; }
 
   .hand .card-in-hand .rank {
     font-size: 0.9rem;
@@ -1631,9 +1646,9 @@ body {
     height: 76px;
     min-width: 56px;
     min-height: 76px;
+    margin-left: -28px;
   }
-
-  /* Адаптивное перекрытие для экранов 480px+ */
+  .hand .card-in-hand:first-child { margin-left: 0; }
 
   .hand .card-in-hand .rank {
     font-size: 0.95rem;
@@ -1656,9 +1671,9 @@ body {
     height: 82px;
     min-width: 60px;
     min-height: 82px;
+    margin-left: -30px;
   }
-
-  /* Адаптивное перекрытие для экранов 640px+ */
+  .hand .card-in-hand:first-child { margin-left: 0; }
 
   .hand .card-in-hand .rank {
     font-size: 1rem;
