@@ -1,0 +1,16 @@
+[Unit]
+Description=Bluf game server (HTTPS)
+After=network.target
+
+[Service]
+Type=simple
+# Замените /root/Bluf на полный путь к папке Bluf на вашем сервере
+WorkingDirectory=/root/Bluf/server
+ExecStart=/usr/bin/node index.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

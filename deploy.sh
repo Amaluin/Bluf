@@ -1,7 +1,9 @@
 #!/bin/bash
 # Быстрый деплой Bluf: git pull в Bluf, затем запуск приложения из Bluf/server
 # Запуск из корня сервера: ./Bluf/deploy.sh   или   bash Bluf/deploy.sh
-# В фоне: nohup ./Bluf/deploy.sh >> Bluf/deploy.log 2>&1 &
+#
+# Чтобы приложение не падало при отключении SSH — запустите его как сервис (один раз):
+#   см. docs/SERVICE.md
 
 set -e
 BLUF_DIR="$(cd "$(dirname "$0")" && pwd)"
