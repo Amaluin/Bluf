@@ -62,8 +62,20 @@ var CHAT_COLORS = [
 var chatNameToColor = {};
 var chatColorIndex = 0;
 
-/* Лобби: видео/звук WebRTC */
-var LOBBY_STUN = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+/* Лобби: видео/звук WebRTC (STUN + опционально TURN для смартфонов) */
+function getLobbyIceServers() {
+  var servers = [{ urls: 'stun:stun.l.google.com:19302' }];
+  var turn = typeof window !== 'undefined' && window.BLUF_TURN;
+  if (turn && turn.url) {
+    servers.push({
+      urls: turn.url,
+      username: turn.username || '',
+      credential: turn.credential || ''
+    });
+  }
+  return { iceServers: servers };
+}
+var LOBBY_STUN = getLobbyIceServers();
 var lobbyMediaRequested = false;
 var localLobbyStream = null;
 var lobbyPeerConnections = {};
@@ -484,6 +496,7 @@ function updateGameUI(state) {
         video.muted = !!lobbyRemoteMuted[sid];
         video.style.display = 'block';
         placeholder.style.display = 'none';
+        video.play().catch(function () {});
       } else {
         video.srcObject = null;
         video.style.display = 'none';
@@ -901,7 +914,7 @@ function stopLobbyMedia() {
 
 function getOrCreateLobbyPeer(remoteSocketId) {
   if (lobbyPeerConnections[remoteSocketId]) return lobbyPeerConnections[remoteSocketId];
-  var pc = new RTCPeerConnection(LOBBY_STUN);
+  var pc = new RTCPeerConnection(getLobbyIceServers());
   pc._remoteSocketId = remoteSocketId;
   pc.onicecandidate = function (e) {
     if (!e.candidate || !roomCode || !socket) return;
@@ -911,6 +924,11 @@ function getOrCreateLobbyPeer(remoteSocketId) {
     var stream = e.streams && e.streams[0] ? e.streams[0] : (e.track ? new MediaStream([e.track]) : null);
     if (!stream) return;
     lobbyRemoteStreams[remoteSocketId] = stream;
+    function playVideo(v) {
+      if (!v || !v.srcObject) return;
+      v.muted = true;
+      v.play().catch(function () {});
+    }
     var list = document.querySelectorAll('.lobby-player');
     for (var i = 0; i < list.length; i++) {
       if (list[i].getAttribute('data-socket-id') === remoteSocketId) {
@@ -918,6 +936,7 @@ function getOrCreateLobbyPeer(remoteSocketId) {
         if (video) {
           video.srcObject = stream;
           video.muted = !!lobbyRemoteMuted[remoteSocketId];
+          playVideo(video);
         }
         break;
       }
@@ -927,7 +946,12 @@ function getOrCreateLobbyPeer(remoteSocketId) {
       if (opponentEls[j].getAttribute('data-socket-id') !== remoteSocketId) continue;
       var v = opponentEls[j].querySelector('.opponent-video-el');
       var ph = opponentEls[j].querySelector('.opponent-video-placeholder');
-      if (v) { v.srcObject = stream; v.style.display = 'block'; }
+      if (v) {
+        v.srcObject = stream;
+        v.muted = !!lobbyRemoteMuted[remoteSocketId];
+        v.style.display = 'block';
+        playVideo(v);
+      }
       if (ph) ph.style.display = 'none';
     }
   };
@@ -1030,8 +1054,11 @@ function renderLobbyWithVideos(players) {
     if (sid === myId) {
       video.srcObject = localLobbyStream;
     } else {
-      if (lobbyRemoteStreams[sid]) video.srcObject = lobbyRemoteStreams[sid];
-      video.muted = !!lobbyRemoteMuted[sid];
+      if (lobbyRemoteStreams[sid]) {
+        video.srcObject = lobbyRemoteStreams[sid];
+        video.muted = !!lobbyRemoteMuted[sid];
+        video.play().catch(function () {});
+      }
     }
   });
 }
