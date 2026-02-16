@@ -140,13 +140,19 @@ function confirmDiceRoll(roomCode, socketId) {
 
   const n = room.players.length;
 
-  // Определяем порядок игроков по результатам броска кубика
-  let maxRoll = Math.max(...room.players.map(p => p.diceRoll));
-  const tiedWithMax = room.players.filter(p => p.diceRoll === maxRoll);
+  // Проверяем, есть ли дубли (одинаковые числа у нескольких игроков)
+  const rollCounts = {};
+  room.players.forEach(p => {
+    rollCounts[p.diceRoll] = (rollCounts[p.diceRoll] || 0) + 1;
+  });
 
-  // Если у нескольких один и тот же максимум — перебрасывают только они
-  if (tiedWithMax.length > 1) {
-    tiedWithMax.forEach(p => {
+  // Находим все числа, которые выпали у нескольких игроков
+  const duplicateRolls = Object.keys(rollCounts).filter(roll => rollCounts[roll] > 1).map(Number);
+
+  // Если есть дубли - перебрасывают только игроки с дублями
+  if (duplicateRolls.length > 0) {
+    const playersToReroll = room.players.filter(p => duplicateRolls.includes(p.diceRoll));
+    playersToReroll.forEach(p => {
       p.diceRoll = Math.floor(Math.random() * 6) + 1;
     });
     return {
@@ -156,14 +162,8 @@ function confirmDiceRoll(roomCode, socketId) {
     };
   }
 
-  const firstPlayerIndex = room.players.findIndex(p => p.diceRoll === maxRoll);
-
-  // Переупорядочиваем игроков по часовой стрелке от первого
-  const reordered = [];
-  for (let i = 0; i < n; i++) {
-    reordered.push(room.players[(firstPlayerIndex + i) % n]);
-  }
-  room.players = reordered;
+  // Сортируем игроков по убыванию результата броска
+  room.players.sort((a, b) => b.diceRoll - a.diceRoll);
 
   const hands = dealCards(n);
   room.hands = hands;

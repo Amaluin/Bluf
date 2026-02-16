@@ -188,6 +188,11 @@ body {
   .opponents {
     gap: 0.3rem;
     flex: 0 0 auto;
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    min-height: auto !important;
   }
   .opponent {
     padding: 0.25rem 0.5rem;
@@ -195,6 +200,12 @@ body {
     width: 180px !important;
     height: 70px !important;
     gap: 0.3rem !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
   }
   .opponent-video-wrap {
     width: 50px !important;
@@ -221,21 +232,6 @@ body {
   .opponent-card-badge {
     font-size: 0.6rem !important;
     padding: 0.1rem 0.25rem !important;
-  }
-  /* Позиции для 4 игроков на мобильных */
-  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(1) {
-    top: 2% !important;
-  }
-  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(2) {
-    top: 35% !important;
-    right: 2% !important;
-  }
-  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(3) {
-    top: 35% !important;
-    left: 2% !important;
-  }
-  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(4) {
-    bottom: 2% !important;
   }
   .my-area {
     padding: 0.35rem 0.35rem 0;
