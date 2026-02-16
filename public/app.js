@@ -1053,10 +1053,23 @@ function getOrCreateLobbyPeer(remoteSocketId) {
     var stream = e.streams && e.streams[0] ? e.streams[0] : (e.track ? new MediaStream([e.track]) : null);
     if (!stream) return;
     lobbyRemoteStreams[remoteSocketId] = stream;
+    // Инициализируем состояние muted для нового собеседника (по умолчанию звук включён)
+    if (lobbyRemoteMuted[remoteSocketId] === undefined) {
+      lobbyRemoteMuted[remoteSocketId] = false;
+    }
     function playVideo(v) {
       if (!v || !v.srcObject) return;
-      v.muted = true;
-      v.play().catch(function () {});
+      // Устанавливаем muted согласно сохранённому состоянию
+      v.muted = !!lobbyRemoteMuted[remoteSocketId];
+      v.play().catch(function (err) {
+        console.warn('Video play error:', err);
+        // Попытка воспроизведения с muted=true при ошибке автовоспроизведения
+        if (err.name === 'NotAllowedError') {
+          v.muted = true;
+          lobbyRemoteMuted[remoteSocketId] = true;
+          v.play().catch(function () {});
+        }
+      });
     }
     var list = document.querySelectorAll('.lobby-player');
     for (var i = 0; i < list.length; i++) {
@@ -1065,6 +1078,9 @@ function getOrCreateLobbyPeer(remoteSocketId) {
         if (video) {
           video.srcObject = stream;
           video.muted = !!lobbyRemoteMuted[remoteSocketId];
+          video.style.display = 'block';
+          var placeholder = list[i].querySelector('.lobby-video-placeholder');
+          if (placeholder) placeholder.style.display = 'none';
           playVideo(video);
         }
         break;
@@ -1159,9 +1175,10 @@ function renderLobbyWithVideos(players) {
     var isSelf = sid === myId;
     var stream = isSelf ? localLobbyStream : lobbyRemoteStreams[sid];
     var hasVideo = !!stream;
-    var videoHtml = hasVideo
-      ? '<video class="lobby-video-el" autoplay playsinline ' + (isSelf ? 'muted ' : '') + 'style="transform:scaleX(' + (isSelf ? '-1' : '1') + ')"></video>'
-      : '<div class="lobby-video-placeholder"></div>';
+    var videoHtml = '<div class="lobby-video-wrap">' +
+      '<video class="lobby-video-el" autoplay playsinline ' + (isSelf ? 'muted ' : '') + 'style="transform:scaleX(' + (isSelf ? '-1' : '1') + '); display:' + (hasVideo ? 'block' : 'none') + '"></video>' +
+      '<div class="lobby-video-placeholder" style="display:' + (hasVideo ? 'none' : 'block') + '"></div>' +
+      '</div>';
     var buttonsHtml;
     if (isSelf) {
       var camClass = myState.cam ? '' : ' lobby-btn-off';
@@ -1175,7 +1192,7 @@ function renderLobbyWithVideos(players) {
       buttonsHtml = '<button type="button" class="btn btn-ghost btn-sm lobby-btn-toggle" data-action="sound">' + escapeHtml(soundLabel) + '</button>';
     }
     return '<li class="lobby-player" data-socket-id="' + escapeHtml(sid) + '" data-is-self="' + (isSelf ? '1' : '0') + '">' +
-      '<div class="lobby-video-wrap">' + videoHtml + '</div>' +
+      videoHtml +
       '<div class="lobby-player-info">' +
       '<span class="lobby-player-name">' + name + '</span>' +
       buttonsHtml +
@@ -1187,11 +1204,29 @@ function renderLobbyWithVideos(players) {
     if (!sid) return;
     if (sid === myId) {
       video.srcObject = localLobbyStream;
+      video.style.display = localLobbyStream ? 'block' : 'none';
+      var myPlaceholder = li.querySelector('.lobby-video-placeholder');
+      if (myPlaceholder) myPlaceholder.style.display = localLobbyStream ? 'none' : 'block';
     } else {
       if (lobbyRemoteStreams[sid]) {
         video.srcObject = lobbyRemoteStreams[sid];
+        // Инициализируем состояние muted если не задано
+        if (lobbyRemoteMuted[sid] === undefined) {
+          lobbyRemoteMuted[sid] = false;
+        }
         video.muted = !!lobbyRemoteMuted[sid];
-        video.play().catch(function () {});
+        video.style.display = 'block';
+        var placeholder = li.querySelector('.lobby-video-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
+        video.play().catch(function (err) {
+          console.warn('Video play error:', err);
+          // Попытка воспроизведения с muted=true при ошибке автовоспроизведения
+          if (err.name === 'NotAllowedError') {
+            video.muted = true;
+            lobbyRemoteMuted[sid] = true;
+            video.play().catch(function () {});
+          }
+        });
       }
     }
   });
