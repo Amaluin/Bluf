@@ -57,6 +57,75 @@ let myHand = [];
 let gameState = null;
 let selectedCards = new Set();
 let isHost = false;
+
+// Логирование для хоста
+var logsEnabled = false;
+var originalConsoleLog = console.log;
+var originalConsoleWarn = console.warn;
+var originalConsoleError = console.error;
+
+function addLogEntry(message, type) {
+  if (!logsEnabled) return;
+  var logsMessages = document.getElementById('logs-messages');
+  if (!logsMessages) return;
+
+  var entry = document.createElement('div');
+  entry.className = 'log-entry log-' + type;
+
+  var timestamp = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  var timestampSpan = document.createElement('span');
+  timestampSpan.className = 'log-timestamp';
+  timestampSpan.textContent = '[' + timestamp + ']';
+
+  entry.appendChild(timestampSpan);
+  entry.appendChild(document.createTextNode(' ' + message));
+
+  logsMessages.appendChild(entry);
+  logsMessages.scrollTop = logsMessages.scrollHeight;
+
+  // Ограничиваем количество логов
+  while (logsMessages.children.length > 500) {
+    logsMessages.removeChild(logsMessages.firstChild);
+  }
+}
+
+function enableLogging() {
+  logsEnabled = true;
+  console.log = function() {
+    var message = Array.prototype.slice.call(arguments).join(' ');
+    addLogEntry(message, 'info');
+    originalConsoleLog.apply(console, arguments);
+  };
+  console.warn = function() {
+    var message = Array.prototype.slice.call(arguments).join(' ');
+    addLogEntry(message, 'warn');
+    originalConsoleWarn.apply(console, arguments);
+  };
+  console.error = function() {
+    var message = Array.prototype.slice.call(arguments).join(' ');
+    addLogEntry(message, 'error');
+    originalConsoleError.apply(console, arguments);
+  };
+}
+
+function disableLogging() {
+  logsEnabled = false;
+  console.log = originalConsoleLog;
+  console.warn = originalConsoleWarn;
+  console.error = originalConsoleError;
+}
+
+function updateLogsVisibility() {
+  var logsWidget = document.getElementById('logs-widget');
+  if (!logsWidget) return;
+  if (isHost && roomCode) {
+    logsWidget.classList.remove('hidden');
+    enableLogging();
+  } else {
+    logsWidget.classList.add('hidden');
+    disableLogging();
+  }
+}
 /** true, если последнее действие — мы нажали «Не верю» (чтобы показать результат вызова только нам) */
 let pendingChallengeByMe = false;
 /** true, если последнее действие — мы нажали «Верю» (чтобы показать результат выбора только нам) */
@@ -254,7 +323,22 @@ function connect() {
     if (existingPc && existingPc.localDescription && existingPc.localDescription.type === 'offer') return;
     function doAnswer() {
       var pc = getOrCreateLobbyPeer(fromSocketId);
-      if (localLobbyStream) localLobbyStream.getTracks().forEach(function (t) { pc.addTrack(t, localLobbyStream); });
+      if (localLobbyStream) {
+        localLobbyStream.getTracks().forEach(function (track) {
+          var sender = pc.addTrack(track, localLobbyStream);
+          // Ограничиваем битрейт для видео
+          if (track.kind === 'video' && sender.setParameters) {
+            var params = sender.getParameters();
+            if (!params.encodings || params.encodings.length === 0) {
+              params.encodings = [{}];
+            }
+            params.encodings[0].maxBitrate = 250000; // 250 kbps для видео
+            sender.setParameters(params).catch(function (err) {
+              console.warn('[Bluf] Failed to set video bitrate:', err);
+            });
+          }
+        });
+      }
       pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(function () {
         drainLobbyIceQueue(fromSocketId);
         return pc.createAnswer();
@@ -1013,8 +1097,13 @@ function requestLobbyMedia() {
     autoGainControl: true,
     noiseSuppression: true
   };
+  var videoConstraints = {
+    width: { ideal: 320, max: 640 },
+    height: { ideal: 240, max: 480 },
+    frameRate: { ideal: 15, max: 24 }
+  };
   return navigator.mediaDevices.getUserMedia({
-    video: true,
+    video: videoConstraints,
     audio: audioConstraints
   })
     .then(function (stream) {
@@ -1165,7 +1254,20 @@ function getOrCreateLobbyPeer(remoteSocketId) {
 function createLobbyOffer(remoteSocketId) {
   if (!localLobbyStream || !roomCode || !socket) return;
   var pc = getOrCreateLobbyPeer(remoteSocketId);
-  localLobbyStream.getTracks().forEach(function (track) { pc.addTrack(track, localLobbyStream); });
+  localLobbyStream.getTracks().forEach(function (track) {
+    var sender = pc.addTrack(track, localLobbyStream);
+    // Ограничиваем битрейт для видео
+    if (track.kind === 'video' && sender.setParameters) {
+      var params = sender.getParameters();
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}];
+      }
+      params.encodings[0].maxBitrate = 250000; // 250 kbps для видео
+      sender.setParameters(params).catch(function (err) {
+        console.warn('[Bluf] Failed to set video bitrate:', err);
+      });
+    }
+  });
   pc.createOffer().then(function (offer) {
     return pc.setLocalDescription(offer);
   }).then(function () {
@@ -1177,17 +1279,34 @@ function ensureLobbyConnections(players) {
   if (!socket || !roomCode || !players || !players.length) return;
   var myId = socket.id;
   var currentIds = players.map(function (p) { return p.socketId; }).filter(Boolean);
+  console.log('[Bluf] Ensuring connections. My ID:', myId, 'Players:', currentIds.length);
   currentIds.forEach(function (sid) {
     if (sid === myId) return;
-    if (myId < sid) {
-      var pc = lobbyPeerConnections[sid];
-      if (!pc || pc.connectionState === 'new' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+    var pc = lobbyPeerConnections[sid];
+    var state = pc ? pc.connectionState : 'none';
+    console.log('[Bluf] Connection to', sid, 'state:', state);
+    // Создаём соединение если его нет или оно в плохом состоянии
+    if (!pc || pc.connectionState === 'new' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      // Используем сравнение ID только для определения, кто создаёт offer
+      if (myId < sid) {
+        console.log('[Bluf] Creating offer to', sid);
+        createLobbyOffer(sid);
+      } else {
+        console.log('[Bluf] Waiting for offer from', sid);
+      }
+    } else if (pc.connectionState === 'disconnected') {
+      // Если соединение отключилось, пытаемся восстановить
+      console.log('[Bluf] Reconnecting to', sid);
+      delete lobbyPeerConnections[sid];
+      delete lobbyRemoteStreams[sid];
+      if (myId < sid) {
         createLobbyOffer(sid);
       }
     }
   });
   Object.keys(lobbyPeerConnections).forEach(function (sid) {
     if (currentIds.indexOf(sid) === -1) {
+      console.log('[Bluf] Removing connection to', sid, '(player left)');
       try { lobbyPeerConnections[sid].close(); } catch (e) {}
       delete lobbyPeerConnections[sid];
       delete lobbyRemoteStreams[sid];
@@ -1256,8 +1375,10 @@ function renderLobbyWithVideos(players) {
       var myPlaceholder = li.querySelector('.lobby-video-placeholder');
       if (myPlaceholder) myPlaceholder.style.display = localLobbyStream ? 'none' : 'block';
     } else {
-      if (lobbyRemoteStreams[sid]) {
-        video.srcObject = lobbyRemoteStreams[sid];
+      var stream = lobbyRemoteStreams[sid];
+      if (stream) {
+        console.log('[Bluf] Setting video for', sid, 'stream tracks:', stream.getTracks().length);
+        video.srcObject = stream;
         // Инициализируем состояние muted если не задано
         if (lobbyRemoteMuted[sid] === undefined) {
           lobbyRemoteMuted[sid] = false;
@@ -1267,7 +1388,7 @@ function renderLobbyWithVideos(players) {
         var placeholder = li.querySelector('.lobby-video-placeholder');
         if (placeholder) placeholder.style.display = 'none';
         video.play().catch(function (err) {
-          console.warn('Video play error:', err);
+          console.warn('Video play error for', sid, ':', err);
           // Попытка воспроизведения с muted=true при ошибке автовоспроизведения
           if (err.name === 'NotAllowedError') {
             video.muted = true;
@@ -1275,6 +1396,11 @@ function renderLobbyWithVideos(players) {
             video.play().catch(function () {});
           }
         });
+      } else {
+        console.warn('[Bluf] No stream for', sid);
+        video.style.display = 'none';
+        var placeholder = li.querySelector('.lobby-video-placeholder');
+        if (placeholder) placeholder.style.display = 'block';
       }
     }
   });
@@ -1575,6 +1701,7 @@ function init() {
         persistRoom();
         isHost = true; // Создатель комнаты всегда хост
         updateChatVisibility();
+        updateLogsVisibility();
         showScreen('screen-lobby');
         requestLobbyMedia();
         socket.emit('set_ready', roomCode);
@@ -1600,6 +1727,7 @@ function init() {
         persistRoom();
         isHost = false; // Присоединившийся игрок не хост
         updateChatVisibility();
+        updateLogsVisibility();
         showScreen('screen-lobby');
         requestLobbyMedia();
         socket.emit('set_ready', roomCode);
@@ -1635,8 +1763,10 @@ function init() {
     lastLobbyState = null;
     roomCode = null;
     myPlayerId = null;
+    isHost = false;
     persistRoom();
     updateChatVisibility();
+    updateLogsVisibility();
     showScreen('screen-welcome');
   });
 
@@ -1742,8 +1872,10 @@ function init() {
     stopLobbyMedia();
     roomCode = null;
     myPlayerId = null;
+    isHost = false;
     persistRoom();
     updateChatVisibility();
+    updateLogsVisibility();
     showScreen('screen-welcome');
   });
 
@@ -1751,8 +1883,10 @@ function init() {
     stopLobbyMedia();
     roomCode = null;
     myPlayerId = null;
+    isHost = false;
     persistRoom();
     updateChatVisibility();
+    updateLogsVisibility();
     showScreen('screen-welcome');
   });
 
@@ -1777,6 +1911,22 @@ function init() {
         e.preventDefault();
         sendChatMessage();
       }
+    });
+  }
+
+  // Обработчики для панели логов
+  var logsToggle = document.getElementById('logs-toggle');
+  var logsWidget = document.getElementById('logs-widget');
+  var logsClear = document.getElementById('logs-clear');
+  if (logsToggle && logsWidget) {
+    logsToggle.addEventListener('click', function () {
+      logsWidget.classList.toggle('is-open');
+    });
+  }
+  if (logsClear) {
+    logsClear.addEventListener('click', function () {
+      var logsMessages = document.getElementById('logs-messages');
+      if (logsMessages) logsMessages.innerHTML = '';
     });
   }
 

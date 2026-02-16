@@ -614,6 +614,8 @@ body {
   list-style: none;
   padding: 0;
   margin: 0 0 1.25rem;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .player-list li {
@@ -1178,7 +1180,7 @@ body {
 
 .opponents {
   position: relative;
-  min-height: 100px;
+  min-height: 200px;
   margin: 0.3rem 0;
   display: flex;
   justify-content: center;
@@ -1276,27 +1278,35 @@ body {
 
 /* Для 4 игроков — квадрат вокруг стола */
 .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(1) {
-  top: 5%;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 5% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translateX(-50%) !important;
 }
 
 .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(2) {
-  top: 50%;
-  right: 8%;
-  transform: translateY(-50%);
+  top: 50% !important;
+  right: 8% !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
 }
 
 .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(3) {
-  top: 50%;
-  left: 8%;
-  transform: translateY(-50%);
+  top: 50% !important;
+  left: 8% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
 }
 
 .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(4) {
-  bottom: 15%;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 15% !important;
+  left: 50% !important;
+  top: auto !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
 }
 
 .opponent {
@@ -1477,10 +1487,10 @@ body {
   .opponents:has(.opponent:nth-child(2):last-child) .opponent:nth-child(2) { right: 10%; }
   .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(2) { right: 12%; }
   .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(3) { left: 12%; }
-  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(1) { top: 5%; left: 50%; }
-  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(2) { top: 50%; right: 8%; }
-  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(3) { top: 50%; left: 8%; }
-  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(4) { bottom: 15%; left: 50%; }
+  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(1) { top: 5% !important; left: 50% !important; right: auto !important; bottom: auto !important; }
+  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(2) { top: 50% !important; right: 8% !important; left: auto !important; bottom: auto !important; }
+  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(3) { top: 50% !important; left: 8% !important; right: auto !important; bottom: auto !important; }
+  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(4) { bottom: 15% !important; left: 50% !important; top: auto !important; right: auto !important; }
 }
 
 @keyframes currentPlayerPulse {
@@ -2267,6 +2277,114 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+/* Логи: раскрывающаяся панель в правом верхнем углу (только для хоста) */
+.logs-widget {
+  position: fixed;
+  top: var(--safe-top);
+  right: 0;
+  z-index: 99998;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  max-height: calc(100dvh - var(--safe-top));
+  pointer-events: none;
+}
+
+.logs-widget > * {
+  pointer-events: auto;
+}
+
+.logs-widget.hidden {
+  display: none !important;
+}
+
+.logs-toggle {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--cream);
+  background: linear-gradient(135deg, rgba(139, 46, 46, 0.9), rgba(179, 61, 61, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px 0 0 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.logs-toggle:hover {
+  background: linear-gradient(135deg, rgba(179, 61, 61, 0.95), rgba(201, 162, 39, 0.95));
+  transform: translateX(-2px);
+}
+
+.logs-panel {
+  display: none;
+  flex-direction: column;
+  width: 400px;
+  max-width: 90vw;
+  background: linear-gradient(135deg, rgba(26, 60, 46, 0.98), rgba(36, 77, 58, 0.98));
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px 0 0 8px;
+  margin-right: 0.35rem;
+  overflow: hidden;
+  box-shadow: 0 4px 20px var(--shadow);
+}
+
+.logs-widget.is-open .logs-panel {
+  display: flex;
+}
+
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.logs-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  min-height: 200px;
+  max-height: 400px;
+  font-size: 0.7rem;
+  line-height: 1.3;
+  font-family: 'Courier New', monospace;
+}
+
+.log-entry {
+  margin-bottom: 0.3rem;
+  word-break: break-word;
+  padding: 0.2rem 0.3rem;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.log-entry.log-info {
+  color: var(--text);
+}
+
+.log-entry.log-warn {
+  color: #f7dc6f;
+  background: rgba(247, 220, 111, 0.1);
+}
+
+.log-entry.log-error {
+  color: #f5b7b1;
+  background: rgba(245, 183, 177, 0.1);
+}
+
+.log-timestamp {
+  color: var(--text-muted);
+  margin-right: 0.3rem;
+  font-size: 0.9em;
 }
 
 /* Connection status indicator */

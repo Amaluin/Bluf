@@ -163,6 +163,18 @@
         </div>
       </div>
     </div>
+
+    <!-- Логи: панель в правом верхнем углу (только для хоста) -->
+    <div id="logs-widget" class="logs-widget hidden">
+      <button id="logs-toggle" class="logs-toggle" type="button" aria-label="Логи">Логи</button>
+      <div id="logs-panel" class="logs-panel">
+        <div class="logs-header">
+          <span>Логи приложения</span>
+          <button id="logs-clear" class="btn btn-ghost btn-sm" type="button">Очистить</button>
+        </div>
+        <div id="logs-messages" class="logs-messages"></div>
+      </div>
+    </div>
   </div>
   <script src="config.js"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
