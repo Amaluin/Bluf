@@ -865,9 +865,31 @@ body {
 
 .status-text {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 1.4rem;
+  font-weight: 600;
   color: var(--cream);
   animation: fadeIn 0.3s ease;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.status-text.my-turn {
+  background: linear-gradient(90deg, rgba(255, 215, 0, 0.3), rgba(255, 165, 0, 0.3), rgba(255, 215, 0, 0.3));
+  background-size: 200% 100%;
+  animation: fadeIn 0.3s ease, shimmer 2s ease-in-out infinite;
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  border: 2px solid rgba(255, 215, 0, 0.6);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* Блок заявки на столе: текст покрупнее, карты отображаются чипами */
@@ -1277,6 +1299,10 @@ body {
 }
 
 /* Для 4 игроков — квадрат вокруг стола */
+.opponents:has(.opponent:nth-child(4):last-child) .opponent {
+  position: absolute !important;
+}
+
 .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(1) {
   top: 5% !important;
   left: 50% !important;

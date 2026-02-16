@@ -63,30 +63,52 @@ var logsEnabled = false;
 var originalConsoleLog = console.log;
 var originalConsoleWarn = console.warn;
 var originalConsoleError = console.error;
+var lastLogUpdateTime = 0;
+var pendingLogs = [];
 
 function addLogEntry(message, type) {
   if (!logsEnabled) return;
+
+  var now = Date.now();
+  pendingLogs.push({ message: message, type: type, time: now });
+
+  // Обновляем логи не чаще раза в 5 секунд
+  if (now - lastLogUpdateTime >= 5000) {
+    flushLogs();
+  }
+}
+
+function flushLogs() {
+  if (pendingLogs.length === 0) return;
+
   var logsMessages = document.getElementById('logs-messages');
   if (!logsMessages) return;
 
-  var entry = document.createElement('div');
-  entry.className = 'log-entry log-' + type;
+  lastLogUpdateTime = Date.now();
 
-  var timestamp = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  var timestampSpan = document.createElement('span');
-  timestampSpan.className = 'log-timestamp';
-  timestampSpan.textContent = '[' + timestamp + ']';
+  pendingLogs.forEach(function(log) {
+    var entry = document.createElement('div');
+    entry.className = 'log-entry log-' + log.type;
 
-  entry.appendChild(timestampSpan);
-  entry.appendChild(document.createTextNode(' ' + message));
+    var timestamp = new Date(log.time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    var timestampSpan = document.createElement('span');
+    timestampSpan.className = 'log-timestamp';
+    timestampSpan.textContent = '[' + timestamp + ']';
 
-  logsMessages.appendChild(entry);
+    entry.appendChild(timestampSpan);
+    entry.appendChild(document.createTextNode(' ' + log.message));
+
+    logsMessages.appendChild(entry);
+  });
+
   logsMessages.scrollTop = logsMessages.scrollHeight;
 
   // Ограничиваем количество логов
   while (logsMessages.children.length > 500) {
     logsMessages.removeChild(logsMessages.firstChild);
   }
+
+  pendingLogs = [];
 }
 
 function enableLogging() {
@@ -106,6 +128,11 @@ function enableLogging() {
     addLogEntry(message, 'error');
     originalConsoleError.apply(console, arguments);
   };
+
+  // Автоматически обновляем логи каждые 5 секунд
+  if (!window.logsFlushInterval) {
+    window.logsFlushInterval = setInterval(flushLogs, 5000);
+  }
 }
 
 function disableLogging() {
@@ -113,6 +140,11 @@ function disableLogging() {
   console.log = originalConsoleLog;
   console.warn = originalConsoleWarn;
   console.error = originalConsoleError;
+
+  if (window.logsFlushInterval) {
+    clearInterval(window.logsFlushInterval);
+    window.logsFlushInterval = null;
+  }
 }
 
 function updateLogsVisibility() {
@@ -515,7 +547,15 @@ function connect() {
 function updateGameUI(state) {
   console.log('updateGameUI called with state:', state);
 
-  $('game-status').textContent = state.isMyTurn ? 'Ваш ход' : `Ход: ${state.players[state.currentPlayerIndex]?.name || '—'}`;
+  const statusEl = $('game-status');
+  statusEl.textContent = state.isMyTurn ? 'Ваш ход' : `Ход: ${state.players[state.currentPlayerIndex]?.name || '—'}`;
+
+  // Добавляем анимацию для "Ваш ход"
+  if (state.isMyTurn) {
+    statusEl.classList.add('my-turn');
+  } else {
+    statusEl.classList.remove('my-turn');
+  }
   const claimEl = $('game-claim');
   const claimCountEl = $('game-claim-count');
   const claimCardsEl = $('game-claim-cards');
@@ -604,55 +644,99 @@ function updateGameUI(state) {
   if (opponents.length === 0) {
     opponentsEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">Ожидание других игроков...</div>';
   } else {
-    opponentsEl.innerHTML = opponents
-      .map(p => {
+    // Проверяем, нужно ли полностью перерисовывать (изменилось количество игроков)
+    const existingOpponents = opponentsEl.querySelectorAll('.opponent');
+    const needsFullRedraw = existingOpponents.length !== opponents.length;
+
+    if (needsFullRedraw) {
+      // Полная перерисовка только если изменилось количество игроков
+      opponentsEl.innerHTML = opponents
+        .map(p => {
+          const isCurrent = p.index === state.currentPlayerIndex;
+          const cardCount = p.handCount || 0;
+          const maxVisible = 8;
+          const visibleCards = Math.min(cardCount, maxVisible);
+          const sid = p.socketId || '';
+
+          let cardsHtml = '';
+          for (let i = 0; i < visibleCards; i++) {
+            cardsHtml += '<div class="opponent-card-back"></div>';
+          }
+          if (cardCount > maxVisible) {
+            cardsHtml += `<div class="opponent-card-badge">+${cardCount - maxVisible}</div>`;
+          }
+
+          const soundLabel = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
+          const cardCountText = cardCount + ' ' + cardWordRu(cardCount);
+          return `<div class="opponent ${isCurrent ? 'current' : ''}" data-socket-id="${escapeHtml(sid)}">
+            <div class="opponent-video-wrap">
+              <video class="opponent-video-el" autoplay playsinline muted></video>
+              <div class="opponent-video-placeholder"></div>
+            </div>
+            <div class="opponent-info">
+              <div class="opponent-name">${escapeHtml(p.name)}</div>
+              <div class="opponent-card-count">${escapeHtml(cardCountText)}</div>
+              <button type="button" class="btn btn-ghost btn-sm game-btn-sound" data-socket-id="${escapeHtml(sid)}">${escapeHtml(soundLabel)}</button>
+              <div class="opponent-hand">${cardsHtml}</div>
+            </div>
+          </div>`;
+        })
+        .join('');
+      opponentsEl.querySelectorAll('.opponent').forEach(function (el) {
+        var sid = el.getAttribute('data-socket-id');
+        var video = el.querySelector('.opponent-video-el');
+        var placeholder = el.querySelector('.opponent-video-placeholder');
+        if (!video || !placeholder) return;
+        if (sid && lobbyRemoteStreams[sid]) {
+          video.srcObject = lobbyRemoteStreams[sid];
+          video.muted = !!lobbyRemoteMuted[sid];
+          video.style.display = 'block';
+          placeholder.style.display = 'none';
+          video.play().catch(function () {});
+        } else {
+          video.srcObject = null;
+          video.style.display = 'none';
+          placeholder.style.display = 'block';
+        }
+      });
+    } else {
+      // Обновляем только данные, не трогая видео
+      existingOpponents.forEach(function(el, idx) {
+        const p = opponents[idx];
+        if (!p) return;
+
         const isCurrent = p.index === state.currentPlayerIndex;
         const cardCount = p.handCount || 0;
         const maxVisible = 8;
         const visibleCards = Math.min(cardCount, maxVisible);
-        const sid = p.socketId || '';
 
-        let cardsHtml = '';
-        for (let i = 0; i < visibleCards; i++) {
-          cardsHtml += '<div class="opponent-card-back"></div>';
-        }
-        if (cardCount > maxVisible) {
-          cardsHtml += `<div class="opponent-card-badge">+${cardCount - maxVisible}</div>`;
+        // Обновляем класс current
+        if (isCurrent) {
+          el.classList.add('current');
+        } else {
+          el.classList.remove('current');
         }
 
-        const soundLabel = lobbyRemoteMuted[sid] ? 'Вкл. звук' : 'Выкл. звук';
-        const cardCountText = cardCount + ' ' + cardWordRu(cardCount);
-        return `<div class="opponent ${isCurrent ? 'current' : ''}" data-socket-id="${escapeHtml(sid)}">
-          <div class="opponent-video-wrap">
-            <video class="opponent-video-el" autoplay playsinline muted></video>
-            <div class="opponent-video-placeholder"></div>
-          </div>
-          <div class="opponent-info">
-            <div class="opponent-name">${escapeHtml(p.name)}</div>
-            <div class="opponent-card-count">${escapeHtml(cardCountText)}</div>
-            <button type="button" class="btn btn-ghost btn-sm game-btn-sound" data-socket-id="${escapeHtml(sid)}">${escapeHtml(soundLabel)}</button>
-            <div class="opponent-hand">${cardsHtml}</div>
-          </div>
-        </div>`;
-      })
-      .join('');
-    opponentsEl.querySelectorAll('.opponent').forEach(function (el) {
-      var sid = el.getAttribute('data-socket-id');
-      var video = el.querySelector('.opponent-video-el');
-      var placeholder = el.querySelector('.opponent-video-placeholder');
-      if (!video || !placeholder) return;
-      if (sid && lobbyRemoteStreams[sid]) {
-        video.srcObject = lobbyRemoteStreams[sid];
-        video.muted = !!lobbyRemoteMuted[sid];
-        video.style.display = 'block';
-        placeholder.style.display = 'none';
-        video.play().catch(function () {});
-      } else {
-        video.srcObject = null;
-        video.style.display = 'none';
-        placeholder.style.display = 'block';
-      }
-    });
+        // Обновляем количество карт
+        const cardCountEl = el.querySelector('.opponent-card-count');
+        if (cardCountEl) {
+          cardCountEl.textContent = cardCount + ' ' + cardWordRu(cardCount);
+        }
+
+        // Обновляем отображение карт
+        const handEl = el.querySelector('.opponent-hand');
+        if (handEl) {
+          let cardsHtml = '';
+          for (let i = 0; i < visibleCards; i++) {
+            cardsHtml += '<div class="opponent-card-back"></div>';
+          }
+          if (cardCount > maxVisible) {
+            cardsHtml += `<div class="opponent-card-badge">+${cardCount - maxVisible}</div>`;
+          }
+          handEl.innerHTML = cardsHtml;
+        }
+      });
+    }
   }
 
   var myVideoWrap = document.getElementById('my-video-wrap');
