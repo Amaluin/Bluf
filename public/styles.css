@@ -145,7 +145,8 @@ body {
     padding: 0.1rem;
   }
   .status-text {
-    font-size: 0.8rem;
+    font-size: 1rem;
+    padding: 0.3rem 0.6rem;
   }
   .claim-block {
     margin: 0.25rem 0 0;
@@ -191,6 +192,35 @@ body {
   .opponent {
     padding: 0.25rem 0.5rem;
     font-size: 0.7rem;
+    width: 180px !important;
+    height: 70px !important;
+    gap: 0.3rem !important;
+  }
+  .opponent-video-wrap {
+    width: 50px !important;
+    height: 50px !important;
+  }
+  .opponent-name {
+    font-size: 0.75rem !important;
+  }
+  .opponent-card-count {
+    font-size: 0.65rem !important;
+  }
+  .game-btn-sound {
+    font-size: 0.6rem !important;
+    padding: 0.15rem 0.3rem !important;
+  }
+  .opponent-hand {
+    gap: 1px !important;
+  }
+  .opponent-card-back {
+    width: 14px !important;
+    height: 20px !important;
+    min-width: 14px !important;
+  }
+  .opponent-card-badge {
+    font-size: 0.6rem !important;
+    padding: 0.1rem 0.25rem !important;
   }
   .my-area {
     padding: 0.35rem 0.35rem 0;
