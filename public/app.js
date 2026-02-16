@@ -701,9 +701,11 @@ function updateGameUI(state) {
       });
     } else {
       // Обновляем только данные, не трогая видео
-      existingOpponents.forEach(function(el, idx) {
-        const p = opponents[idx];
-        if (!p) return;
+      opponents.forEach(function(p) {
+        const sid = p.socketId || '';
+        // Находим элемент по socketId, а не по индексу
+        const el = opponentsEl.querySelector(`.opponent[data-socket-id="${sid}"]`);
+        if (!el) return;
 
         const isCurrent = p.index === state.currentPlayerIndex;
         const cardCount = p.handCount || 0;
