@@ -1340,7 +1340,8 @@ body {
   flex-direction: row;
   align-items: center;
   gap: 0.4rem;
-  max-width: 280px;
+  width: 280px;
+  height: 100px;
 }
 
 .opponent-video-wrap {

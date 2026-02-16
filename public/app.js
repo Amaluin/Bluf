@@ -1370,7 +1370,9 @@ function ensureLobbyConnections(players) {
     if (sid === myId) return;
     var pc = lobbyPeerConnections[sid];
     var state = pc ? pc.connectionState : 'none';
-    console.log('[Bluf] Connection to', sid, 'state:', state);
+    var hasStream = !!lobbyRemoteStreams[sid];
+    console.log('[Bluf] Connection to', sid, 'state:', state, 'hasStream:', hasStream);
+
     // Создаём соединение если его нет или оно в плохом состоянии
     if (!pc || pc.connectionState === 'new' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
       // Используем сравнение ID только для определения, кто создаёт offer
@@ -1383,6 +1385,15 @@ function ensureLobbyConnections(players) {
     } else if (pc.connectionState === 'disconnected') {
       // Если соединение отключилось, пытаемся восстановить
       console.log('[Bluf] Reconnecting to', sid);
+      delete lobbyPeerConnections[sid];
+      delete lobbyRemoteStreams[sid];
+      if (myId < sid) {
+        createLobbyOffer(sid);
+      }
+    } else if (pc.connectionState === 'connected' && !hasStream) {
+      // Соединение установлено, но потока нет - переподключаемся
+      console.warn('[Bluf] Connected but no stream for', sid, '- reconnecting');
+      try { pc.close(); } catch (e) {}
       delete lobbyPeerConnections[sid];
       delete lobbyRemoteStreams[sid];
       if (myId < sid) {
