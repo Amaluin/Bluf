@@ -1057,6 +1057,24 @@ function getOrCreateLobbyPeer(remoteSocketId) {
     if (lobbyRemoteMuted[remoteSocketId] === undefined) {
       lobbyRemoteMuted[remoteSocketId] = false;
     }
+
+    // Отслеживаем состояние треков для восстановления
+    stream.getTracks().forEach(function (track) {
+      track.onended = function () {
+        console.warn('[Bluf] Track ended for', remoteSocketId, '- попытка восстановления...');
+        setTimeout(function () {
+          if (!lobbyRemoteStreams[remoteSocketId] || lobbyRemoteStreams[remoteSocketId].getTracks().every(function (t) { return t.readyState === 'ended'; })) {
+            console.log('[Bluf] Attempting to restore connection to', remoteSocketId);
+            delete lobbyPeerConnections[remoteSocketId];
+            delete lobbyRemoteStreams[remoteSocketId];
+            if (lastLobbyState && lastLobbyState.players) {
+              ensureLobbyConnections(lastLobbyState.players);
+            }
+          }
+        }, 3000);
+      };
+    });
+
     function playVideo(v) {
       if (!v || !v.srcObject) return;
       // Устанавливаем muted согласно сохранённому состоянию
@@ -1104,9 +1122,39 @@ function getOrCreateLobbyPeer(remoteSocketId) {
     if (pc.connectionState === 'connected' || pc.connectionState === 'completed') {
       console.log('[Bluf] ICE connected to', remoteSocketId);
     } else if (pc.connectionState === 'failed') {
-      console.warn('[Bluf] ICE failed for', remoteSocketId, '(TURN/STUN или сеть?)');
+      console.warn('[Bluf] ICE failed for', remoteSocketId, '(TURN/STUN или сеть?) - попытка восстановления...');
+      // Попытка восстановления соединения
+      setTimeout(function () {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          console.log('[Bluf] Attempting to reconnect to', remoteSocketId);
+          try {
+            pc.restartIce();
+          } catch (e) {
+            console.warn('[Bluf] restartIce failed, recreating connection:', e);
+            // Если restartIce не поддерживается, пересоздаём соединение
+            delete lobbyPeerConnections[remoteSocketId];
+            delete lobbyRemoteStreams[remoteSocketId];
+            if (lastLobbyState && lastLobbyState.players) {
+              ensureLobbyConnections(lastLobbyState.players);
+            }
+          }
+        }
+      }, 2000);
+    } else if (pc.connectionState === 'disconnected') {
+      console.warn('[Bluf] ICE disconnected from', remoteSocketId, '- ожидание восстановления...');
+      // Ждём 5 секунд перед попыткой восстановления
+      setTimeout(function () {
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          console.log('[Bluf] Attempting to reconnect to', remoteSocketId);
+          delete lobbyPeerConnections[remoteSocketId];
+          delete lobbyRemoteStreams[remoteSocketId];
+          if (lastLobbyState && lastLobbyState.players) {
+            ensureLobbyConnections(lastLobbyState.players);
+          }
+        }
+      }, 5000);
     }
-    if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
+    if (pc.connectionState === 'closed') {
       delete lobbyRemoteStreams[remoteSocketId];
     }
   };
@@ -1691,6 +1739,15 @@ function init() {
   });
 
   $('btn-leave-game').addEventListener('click', () => {
+    stopLobbyMedia();
+    roomCode = null;
+    myPlayerId = null;
+    persistRoom();
+    updateChatVisibility();
+    showScreen('screen-welcome');
+  });
+
+  $('btn-play-again').addEventListener('click', () => {
     stopLobbyMedia();
     roomCode = null;
     myPlayerId = null;

@@ -1274,6 +1274,31 @@ body {
   transform: none;
 }
 
+/* Для 4 игроков — квадрат вокруг стола */
+.opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(1) {
+  top: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(2) {
+  top: 50%;
+  right: 8%;
+  transform: translateY(-50%);
+}
+
+.opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(3) {
+  top: 50%;
+  left: 8%;
+  transform: translateY(-50%);
+}
+
+.opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(4) {
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 .opponent {
   display: flex;
   flex-direction: row;
@@ -1452,6 +1477,10 @@ body {
   .opponents:has(.opponent:nth-child(2):last-child) .opponent:nth-child(2) { right: 10%; }
   .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(2) { right: 12%; }
   .opponents:has(.opponent:nth-child(3):last-child) .opponent:nth-child(3) { left: 12%; }
+  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(1) { top: 5%; left: 50%; }
+  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(2) { top: 50%; right: 8%; }
+  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(3) { top: 50%; left: 8%; }
+  .opponents:has(.opponent:nth-child(4):last-child) .opponent:nth-child(4) { bottom: 15%; left: 50%; }
 }
 
 @keyframes currentPlayerPulse {
@@ -2404,17 +2433,6 @@ body {
 .hand .card-in-hand {
   animation: none !important;
 }
-
-.hand .card-in-hand:nth-child(1) { animation-delay: 0.05s; }
-.hand .card-in-hand:nth-child(2) { animation-delay: 0.1s; }
-.hand .card-in-hand:nth-child(3) { animation-delay: 0.15s; }
-.hand .card-in-hand:nth-child(4) { animation-delay: 0.2s; }
-.hand .card-in-hand:nth-child(5) { animation-delay: 0.25s; }
-.hand .card-in-hand:nth-child(6) { animation-delay: 0.3s; }
-.hand .card-in-hand:nth-child(7) { animation-delay: 0.35s; }
-.hand .card-in-hand:nth-child(8) { animation-delay: 0.4s; }
-.hand .card-in-hand:nth-child(9) { animation-delay: 0.45s; }
-.hand .card-in-hand:nth-child(10) { animation-delay: 0.5s; }
 
 @keyframes enhancedCardDeal {
   0% {
