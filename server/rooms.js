@@ -319,13 +319,14 @@ function trust(roomCode, socketId) {
   const cardCount = allCards.length;
 
   if (wasRight) {
-    // Правда: карты уходят в отбой, ход остаётся у того, кто сказал «Верю» (он угадал)
+    // Правда: игрок угадал, карты уходят в отбой, ход переходит к игроку, который сказал «Верю»
     const revealedCards = lastPlay.cardIds;
     const claimedRank = lastPlay.claimedRank;
     room.discard.push(...allCards);
     room.pile = [];
     room.lastClaim = null;
-    room.currentPlayerIndex = playerIndex; // Ход остаётся у того, кто угадал
+    // Ход переходит к игроку, который угадал
+    room.currentPlayerIndex = playerIndex;
     // Если кто-то только что избавился от последних карт — он победил
     if (room.pendingWinnerIndex !== undefined) {
       room.winnerIndex = room.pendingWinnerIndex;
@@ -337,14 +338,14 @@ function trust(roomCode, socketId) {
     return { ok: true, nextPlayerIndex: room.currentPlayerIndex, trustResult: 'discard', revealedCards, claimedRank };
   }
 
-  // Не правда: карты забирает тот, кто нажал «Верю», ход переходит к тому, кто блефовал (он выиграл)
-  const liarIndex = lastPlay.playerIndex;
+  // Не правда: игрок ошибся, карты забирает тот, кто нажал «Верю», ход переходит следующему игроку
   const trusterIndex = playerIndex; // тот, кто сказал «Верю», забирает карты
   const loser = room.players[trusterIndex];
   loser.hand.push(...allCards);
   room.pile = [];
   room.lastClaim = null;
-  room.currentPlayerIndex = liarIndex; // Ход переходит к тому, кто блефовал (он выиграл)
+  // Ход переходит следующему игроку по очереди
+  room.currentPlayerIndex = (playerIndex + 1) % room.players.length;
 
   moveFourOfAKindToDiscard(loser.hand, room.discard);
 
