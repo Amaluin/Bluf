@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тест полей ввода</title>
+  <style>
+    body {
+      margin: 40px;
+      font-family: Arial, sans-serif;
+      background: #1a3c2e;
+      color: white;
+    }
+    .test-input {
+      width: 300px;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 16px;
+      border: 2px solid #ffd700;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #ffd700;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Тест полей ввода</h1>
+  <p>Если вы можете вводить текст здесь, значит проблема в основном файле:</p>
+  
+  <label>Ваше имя:</label><br>
+  <input type="text" class="test-input" id="test-name" placeholder="Введите имя"><br>
+  
+  <label>Код комнаты:</label><br>
+  <input type="text" class="test-input" id="test-code" placeholder="Введите код"><br>
+  
+  <button onclick="testInputs()">Проверить значения</button>
+  
+  <div id="result" style="margin-top: 20px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 5px;"></div>
+
+  <script>
+    function testInputs() {
+      const name = document.getElementById('test-name').value;
+      const code = document.getElementById('test-code').value;
+      const result = document.getElementById('result');
+      result.innerHTML = `
+        <strong>Результат:</strong><br>
+        Имя: ${name || '(пусто)'}<br>
+        Код: ${code || '(пусто)'}
+      `;
+    }
+    
+    // Автоматическая проверка при загрузке
+    console.log('Тестовая страница загружена');
+    console.log('Input name:', document.getElementById('test-name'));
+    console.log('Input code:', document.getElementById('test-code'));
+  </script>
+</body>
+</html>
